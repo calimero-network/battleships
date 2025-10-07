@@ -66,26 +66,19 @@ battleship/
    cd battleship
    ```
 
-2. **Install frontend dependencies**
+2. **Install frontend dependencies (via root scripts)**
    ```bash
-   cd app
-   npm install
-   # or
-   pnpm install
+   pnpm run app:install
    ```
 
-3. **Build the backend**
+3. **Build the backend (WASM)**
    ```bash
-   cd logic
-   ./build.sh
+   pnpm run logic:build
    ```
 
-4. **Start the development server**
+4. **Start the development servers (frontend + WASM watcher)**
    ```bash
-   cd app
-   npm start
-   # or
-   pnpm start
+   pnpm run app:dev
    ```
 
 ## 🎯 Game Rules
@@ -116,11 +109,23 @@ The Rust backend follows Domain-Driven Design principles:
 #### Building and Testing
 
 ```bash
+# Build WASM (release profile used by the app)
+pnpm run logic:build
+
+# Optional: clean build artifacts
+pnpm run logic:clean
+
+# Optional: continuously watch and sync WASM into app on changes
+pnpm run logic:watch
+
+# Generate ABI client for the frontend from the latest ABI
+pnpm run app:generate-client
+
+# Low-level Rust workflows (if you need them)
 cd logic
 cargo check          # Check for compilation errors
 cargo test           # Run tests
 cargo doc --open     # Generate and view documentation
-./build.sh           # Build for Calimero
 ```
 
 ### Frontend Development
@@ -135,10 +140,14 @@ The React frontend provides a modern, intuitive interface:
 #### Development Commands
 
 ```bash
-cd app
-npm start            # Start development server
-npm run build        # Build for production
-npm test             # Run tests
+# Start the app + WASM res watcher together (recommended)
+pnpm run app:dev
+
+# Build production frontend
+pnpm run app:build
+
+# Preview the production build locally
+pnpm run app:preview
 ```
 
 ## 📚 Documentation
@@ -178,23 +187,31 @@ npm test
 
 ### Calimero Deployment
 
-1. **Build the WASM**
+1. **Bootstrap local Calimero network with workflow**
    ```bash
-   cd logic
-   ./build.sh
+   pnpm run network:bootstrap
    ```
 
-2. **Deploy to Calimero**
+2. **Build the WASM**
+   ```bash
+   pnpm run logic:build
+   ```
+
+3. **Sync the built WASM into the app**
+   ```bash
+   pnpm run logic:sync
+   ```
+
+4. **Deploy to Calimero**
    - Follow Calimero deployment guidelines
-   - Upload the generated WASM file
+   - Upload the generated WASM file (`logic/target/wasm32-unknown-unknown/app-release/kv_store.wasm`)
    - Configure the frontend to connect to your Calimero node
 
 ### Frontend Deployment
 
 ```bash
-cd app
-npm run build
-# Deploy the build/ directory to your hosting service
+pnpm run app:build
+# Deploy the app/dist (or app/build) directory to your hosting service
 ```
 
 ## 🤝 Contributing
