@@ -1,0 +1,13 @@
+/Users/chefsale/workspace/calimero/examples/battleship/logic/target/debug/deps/calimero_sdk-6fdca67abd83b88a.d: /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/lib.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/env.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/env/ext.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/event.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/macros.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/private_storage.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/returns.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/state.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/types.rs
+
+/Users/chefsale/workspace/calimero/examples/battleship/logic/target/debug/deps/libcalimero_sdk-6fdca67abd83b88a.rmeta: /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/lib.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/env.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/env/ext.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/event.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/macros.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/private_storage.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/returns.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/state.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/types.rs
+
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/lib.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/env.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/env/ext.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/event.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/macros.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/private_storage.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/returns.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/state.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/sdk/src/types.rs:

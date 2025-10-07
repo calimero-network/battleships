@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Validation Strategy Pattern"><title>kv_store::validation - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="kv_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.91.0-nightly (fe5536432 2025-08-29)" data-channel="nightly" data-search-js="search-03d23683.js" data-stringdex-js="stringdex-0e748618.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-6dc2a7f3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module validation</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../kv_store/index.html">kv_<wbr>store</a><span class="version">0.2.5</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module validation</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#validation-strategy-pattern" title="Validation Strategy Pattern">Validation Strategy Pattern</a><ul><li><a href="#architecture-overview" title="Architecture Overview">Architecture Overview</a></li><li><a href="#usage-examples" title="Usage Examples">Usage Examples</a></li><li><a href="#benefits" title="Benefits">Benefits</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate kv_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">kv_store</a></div><h1>Module <span>validation</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/kv_store/validation.rs.html#1-694">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="validation-strategy-pattern"><a class="doc-anchor" href="#validation-strategy-pattern">§</a>Validation Strategy Pattern</h2>
+<p>This module implements a comprehensive <strong>Validation Strategy Pattern</strong> for the battleship game.
+It addresses the scattered validation logic issue by providing a flexible, extensible, and maintainable approach to validation.</p>
+<h3 id="architecture-overview"><a class="doc-anchor" href="#architecture-overview">§</a>Architecture Overview</h3>
+<p>The pattern consists of three main components:</p>
+<ol>
+<li><strong>ValidationStrategy Trait</strong> - Defines the contract for all validation strategies</li>
+<li><strong>ValidationInput Struct</strong> - Flexible input structure for validation data</li>
+<li><strong>ValidationContext Manager</strong> - Manages and executes multiple validation strategies</li>
+</ol>
+<h3 id="usage-examples"><a class="doc-anchor" href="#usage-examples">§</a>Usage Examples</h3><h4 id="using-predefined-validation-contexts"><a class="doc-anchor" href="#using-predefined-validation-contexts">§</a>Using Predefined Validation Contexts</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span><span class="kw">crate</span>::validation::{validate_ship_placement, validate_fleet_composition, validate_coordinates};
+
+<span class="comment">// Ship placement validation
+</span><span class="kw">let </span>board = Board::new_zeroed(BOARD_SIZE);
+<span class="kw">let </span>coordinates = <span class="macro">vec!</span>[
+    Coordinate::new(<span class="number">0</span>, <span class="number">0</span>).unwrap(),
+    Coordinate::new(<span class="number">0</span>, <span class="number">1</span>).unwrap(),
+    Coordinate::new(<span class="number">0</span>, <span class="number">2</span>).unwrap(),
+];
+<span class="kw">let </span>result = validate_ship_placement(<span class="kw-2">&amp;</span>board, <span class="kw-2">&amp;</span>coordinates, BOARD_SIZE);</code></pre></div>
+<h4 id="creating-custom-validation-contexts"><a class="doc-anchor" href="#creating-custom-validation-contexts">§</a>Creating Custom Validation Contexts</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span><span class="kw">crate</span>::validation::{ValidationContext, BoundsValidationStrategy, UniquenessValidationStrategy};
+
+<span class="kw">let </span>custom_context = ValidationContext::new()
+    .add_strategy(Box::new(BoundsValidationStrategy))
+    .add_strategy(Box::new(UniquenessValidationStrategy));
+
+<span class="kw">let </span>input = ValidationInput::new()
+    .with_coordinates(coordinates)
+    .with_size(BOARD_SIZE);
+
+<span class="kw">let </span>result = custom_context.validate(<span class="kw-2">&amp;</span>input);</code></pre></div>
+<h4 id="extending-with-new-validation-strategies"><a class="doc-anchor" href="#extending-with-new-validation-strategies">§</a>Extending with New Validation Strategies</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span><span class="kw">crate</span>::validation::ValidationStrategy;
+<span class="kw">use </span><span class="kw">crate</span>::GameError;
+
+<span class="kw">struct </span>CustomValidationStrategy {
+    min_length: u8,
+    max_length: u8,
+}
+
+<span class="kw">impl </span>ValidationStrategy <span class="kw">for </span>CustomValidationStrategy {
+    <span class="kw">fn </span>validate(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>ValidationInput) -&gt; <span class="prelude-ty">Result</span>&lt;(), GameError&gt; {
+        <span class="kw">let </span>length = input.ship_length
+            .or_else(|| input.coordinates.as_ref().map(|coords| coords.len() <span class="kw">as </span>u8))
+            .ok_or_else(|| GameError::Invalid(<span class="string">"ship length required"</span>))<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>length &lt; <span class="self">self</span>.min_length || length &gt; <span class="self">self</span>.max_length {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GameError::Invalid(<span class="string">"ship length out of custom range"</span>));
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">fn </span>name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+        <span class="string">"CustomLengthValidation"
+    </span>}
+}</code></pre></div>
+<h3 id="benefits"><a class="doc-anchor" href="#benefits">§</a>Benefits</h3>
+<ul>
+<li><strong>Extensibility</strong>: Easy to add new validation rules</li>
+<li><strong>Composability</strong>: Mix and match validation strategies</li>
+<li><strong>Testability</strong>: Each strategy can be tested independently</li>
+<li><strong>Maintainability</strong>: Validation logic is organized and separated</li>
+<li><strong>Reusability</strong>: Strategies can be reused across the application</li>
+<li><strong>Flexibility</strong>: Custom validation contexts for specific use cases</li>
+<li><strong>Single Responsibility</strong>: Each strategy has one clear purpose</li>
+<li><strong>Open/Closed Principle</strong>: Open for extension, closed for modification</li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.AdjacencyValidationStrategy.html" title="struct kv_store::validation::AdjacencyValidationStrategy">Adjacency<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that ships are not adjacent to each other</dd><dt><a class="struct" href="struct.BoundsValidationStrategy.html" title="struct kv_store::validation::BoundsValidationStrategy">Bounds<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that coordinates are within board bounds</dd><dt><a class="struct" href="struct.ContiguityValidationStrategy.html" title="struct kv_store::validation::ContiguityValidationStrategy">Contiguity<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that ship coordinates are contiguous</dd><dt><a class="struct" href="struct.FleetCompositionValidationStrategy.html" title="struct kv_store::validation::FleetCompositionValidationStrategy">Fleet<wbr>Composition<wbr>Validation<wbr>Strategy</a></dt><dd>Validates fleet composition follows standard battleship rules</dd><dt><a class="struct" href="struct.OverlapValidationStrategy.html" title="struct kv_store::validation::OverlapValidationStrategy">Overlap<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that ship placement doesn’t overlap with existing ships</dd><dt><a class="struct" href="struct.ShipAdjacencyValidationStrategy.html" title="struct kv_store::validation::ShipAdjacencyValidationStrategy">Ship<wbr>Adjacency<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that ships are not adjacent to each other</dd><dt><a class="struct" href="struct.ShipLengthValidationStrategy.html" title="struct kv_store::validation::ShipLengthValidationStrategy">Ship<wbr>Length<wbr>Validation<wbr>Strategy</a></dt><dd>Validates ship length is within acceptable range</dd><dt><a class="struct" href="struct.ShipOverlapValidationStrategy.html" title="struct kv_store::validation::ShipOverlapValidationStrategy">Ship<wbr>Overlap<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that ships don’t overlap with each other</dd><dt><a class="struct" href="struct.StraightLineValidationStrategy.html" title="struct kv_store::validation::StraightLineValidationStrategy">Straight<wbr>Line<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that ship is in a straight line</dd><dt><a class="struct" href="struct.UniquenessValidationStrategy.html" title="struct kv_store::validation::UniquenessValidationStrategy">Uniqueness<wbr>Validation<wbr>Strategy</a></dt><dd>Validates that coordinates are unique (no duplicates)</dd><dt><a class="struct" href="struct.ValidationContext.html" title="struct kv_store::validation::ValidationContext">Validation<wbr>Context</a></dt><dd>Manages validation strategies and executes them in sequence</dd><dt><a class="struct" href="struct.ValidationInput.html" title="struct kv_store::validation::ValidationInput">Validation<wbr>Input</a></dt><dd>Input data for validation strategies</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.ValidationStrategy.html" title="trait kv_store::validation::ValidationStrategy">Validation<wbr>Strategy</a></dt><dd>Trait defining the validation strategy interface</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.validate_coordinates.html" title="fn kv_store::validation::validate_coordinates">validate_<wbr>coordinates</a></dt><dd>Validates coordinates using the coordinates-only strategy</dd><dt><a class="fn" href="fn.validate_fleet_composition.html" title="fn kv_store::validation::validate_fleet_composition">validate_<wbr>fleet_<wbr>composition</a></dt><dd>Validates fleet composition using the fleet composition strategy</dd><dt><a class="fn" href="fn.validate_ship_placement.html" title="fn kv_store::validation::validate_ship_placement">validate_<wbr>ship_<wbr>placement</a></dt><dd>Validates ship placement using the ship placement strategy</dd></dl></section></div></main></body></html>

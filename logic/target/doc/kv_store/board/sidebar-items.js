@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BOARD_SIZE"],"enum":["Cell"],"struct":["Board","Coordinate"]};

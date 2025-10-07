@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GameError"],"mod":["board","events","game","players","ships","validation"],"struct":["BattleshipState","OwnBoardView","ShotsView"]};

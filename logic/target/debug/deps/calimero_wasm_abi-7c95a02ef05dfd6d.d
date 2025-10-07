@@ -1,0 +1,10 @@
+/Users/chefsale/workspace/calimero/examples/battleship/logic/target/debug/deps/calimero_wasm_abi-7c95a02ef05dfd6d.d: /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/lib.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/embed.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/emitter.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/normalize.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/schema.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/validate.rs
+
+/Users/chefsale/workspace/calimero/examples/battleship/logic/target/debug/deps/libcalimero_wasm_abi-7c95a02ef05dfd6d.rmeta: /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/lib.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/embed.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/emitter.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/normalize.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/schema.rs /Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/validate.rs
+
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/lib.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/embed.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/emitter.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/normalize.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/schema.rs:
+/Users/chefsale/.cargo/git/checkouts/core-d338b229ad9a615b/6650811/crates/wasm-abi/src/validate.rs:

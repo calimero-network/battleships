@@ -1,0 +1,10 @@
+/Users/chefsale/workspace/calimero/examples/battleship/logic/target/debug/deps/fixedstr-1ca5229e19ccb99f.d: /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/lib.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/full_fixed.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/shared_structs.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/flexible_string.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/zero_terminated.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/tiny_internal.rs
+
+/Users/chefsale/workspace/calimero/examples/battleship/logic/target/debug/deps/libfixedstr-1ca5229e19ccb99f.rmeta: /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/lib.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/full_fixed.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/shared_structs.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/flexible_string.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/zero_terminated.rs /Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/tiny_internal.rs
+
+/Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/lib.rs:
+/Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/full_fixed.rs:
+/Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/shared_structs.rs:
+/Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/flexible_string.rs:
+/Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/zero_terminated.rs:
+/Users/chefsale/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/fixedstr-0.5.9/src/tiny_internal.rs:
