@@ -37,9 +37,7 @@ export default function Authenticate() {
         <NavbarBrand text="KV Store" />
         <NavbarMenu align="right">
           <NavbarItem>
-            <CalimeroConnectButton
-              connectionType={ConnectionType.Remote}
-            />
+            <CalimeroConnectButton connectionType={ConnectionType.Remote} />
           </NavbarItem>
         </NavbarMenu>
       </MeroNavbar>

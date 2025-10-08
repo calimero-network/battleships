@@ -35,7 +35,7 @@
 //! ### Creating a Match
 //! ```rust
 //! use battleship::BattleshipState;
-//! 
+//!
 //! let mut state = BattleshipState::init();
 //! let match_id = state.create_match("player2_base58_key".to_string())?;
 //! ```
@@ -82,10 +82,10 @@ use calimero_storage::env;
 // ============================================================================
 
 pub mod board;
-pub mod ships;
-pub mod players;
-pub mod game;
 pub mod events;
+pub mod game;
+pub mod players;
+pub mod ships;
 pub mod validation;
 
 // ============================================================================
@@ -97,18 +97,17 @@ use calimero_sdk::serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 // Re-export types from modules
-pub use board::{Board, Coordinate, Cell, BOARD_SIZE};
-pub use ships::{Ship, Fleet, ShipValidator};
-pub use players::{PublicKey, PlayerBoard, PrivateBoards};
-pub use game::{Match, ShotResolver};
+pub use board::{Board, Cell, Coordinate, BOARD_SIZE};
 pub use events::Event;
+pub use game::{Match, ShotResolver};
+pub use players::{PlayerBoard, PrivateBoards, PublicKey};
+pub use ships::{Fleet, Ship, ShipValidator};
 pub use validation::{
-    ValidationStrategy, ValidationInput, ValidationContext,
-    BoundsValidationStrategy, UniquenessValidationStrategy, OverlapValidationStrategy,
-    AdjacencyValidationStrategy, StraightLineValidationStrategy, ContiguityValidationStrategy,
-    ShipLengthValidationStrategy, FleetCompositionValidationStrategy,
-    ShipOverlapValidationStrategy, ShipAdjacencyValidationStrategy,
-    validate_ship_placement, validate_fleet_composition, validate_coordinates
+    validate_coordinates, validate_fleet_composition, validate_ship_placement,
+    AdjacencyValidationStrategy, BoundsValidationStrategy, ContiguityValidationStrategy,
+    FleetCompositionValidationStrategy, OverlapValidationStrategy, ShipAdjacencyValidationStrategy,
+    ShipLengthValidationStrategy, ShipOverlapValidationStrategy, StraightLineValidationStrategy,
+    UniquenessValidationStrategy, ValidationContext, ValidationInput, ValidationStrategy,
 };
 
 // Define ABI-critical types directly in lib.rs
@@ -132,11 +131,11 @@ pub use validation::{
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
-pub struct OwnBoardView { 
+pub struct OwnBoardView {
     /// The board size (always 10 for standard battleship)
-    pub size: u8, 
+    pub size: u8,
     /// Flat vector representation of the board cells
-    pub board: Vec<u8> 
+    pub board: Vec<u8>,
 }
 
 /// Represents a player's shots view for API responses
@@ -157,11 +156,11 @@ pub struct OwnBoardView {
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
-pub struct ShotsView { 
+pub struct ShotsView {
     /// The board size (always 10 for standard battleship)
-    pub size: u8, 
+    pub size: u8,
     /// Flat vector representation of the shot cells
-    pub shots: Vec<u8> 
+    pub shots: Vec<u8>,
 }
 
 /// Comprehensive error type for all game operations
@@ -228,7 +227,7 @@ pub enum GameError {
 /// let state = BattleshipState::init();
 /// let match_id = state.create_match("player2_key".to_string())?;
 /// ```
-#[app::state]
+#[app::state(emits = for<'a> Event<'a>)]
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
 #[borsh(crate = "calimero_sdk::borsh")]
 pub struct BattleshipState {
@@ -257,12 +256,14 @@ impl BattleshipState {
     }
 
     fn get_active_match(&self) -> app::Result<&Match> {
-        self.active_match.as_ref()
+        self.active_match
+            .as_ref()
             .ok_or_else(|| calimero_sdk::types::Error::from(GameError::Invalid("no active match")))
     }
 
     fn get_active_match_mut(&mut self) -> app::Result<&mut Match> {
-        self.active_match.as_mut()
+        self.active_match
+            .as_mut()
             .ok_or_else(|| calimero_sdk::types::Error::from(GameError::Invalid("no active match")))
     }
 }
@@ -302,17 +303,17 @@ impl BattleshipState {
 
         let player1 = PublicKey::from_executor_id()?;
         let player2_pk = PublicKey::from_base58(&player2)?;
-        
+
         if player1 == player2_pk {
             app::bail!(GameError::Invalid("players must differ"));
         }
 
         let id = self.next_id();
         self.active_match = Some(Match::new(id.clone(), player1, player2_pk));
-        
+
         app::emit!(Event::MatchCreated { id: &id });
         Ok(id)
-}
+    }
 
     /// Places ships on the current player's board
     ///
@@ -354,7 +355,7 @@ impl BattleshipState {
         let mut priv_mut = priv_boards.as_mut();
         let key = PrivateBoards::key(match_id);
         let mut pb = priv_mut.boards.get(&key)?.unwrap_or(PlayerBoard::new());
-        
+
         pb.place_ships(ships)?;
         priv_mut.boards.insert(key, pb)?;
 
@@ -367,7 +368,7 @@ impl BattleshipState {
 
         app::emit!(Event::ShipsPlaced { id: match_id });
         Ok(())
-}
+    }
 
     pub fn propose_shot(&mut self, match_id: &str, x: u8, y: u8) -> app::Result<()> {
         let match_state = self.get_active_match_mut()?;
@@ -377,10 +378,13 @@ impl BattleshipState {
 
         let caller = PublicKey::from_executor_id()?;
         match_state.propose_shot(caller, x, y)?;
-        
-        app::emit!(Event::ShotProposed { id: match_id, x, y });
+
+        app::emit!((
+            Event::ShotProposed { id: match_id, x, y },
+            "acknowledge_shot_handler"
+        ));
         Ok(())
-}
+    }
 
     pub fn acknowledge_shot(&mut self, match_id: &str) -> app::Result<String> {
         let match_state = self.get_active_match_mut()?;
@@ -398,22 +402,23 @@ impl BattleshipState {
         let mut priv_boards = PrivateBoards::private_load_or_default()?;
         let mut priv_mut = priv_boards.as_mut();
         let key = PrivateBoards::key(match_id);
-        let mut target_pb = priv_mut.boards.get(&key)?
-            .ok_or_else(|| calimero_sdk::types::Error::from(GameError::Invalid("target board unavailable")))?;
+        let mut target_pb = priv_mut.boards.get(&key)?.ok_or_else(|| {
+            calimero_sdk::types::Error::from(GameError::Invalid("target board unavailable"))
+        })?;
 
         let result = ShotResolver::resolve_shot(match_state, &mut target_pb)?;
         priv_mut.boards.insert(key, target_pb)?;
-        
+
         if match_state.winner.is_some() {
             app::emit!(Event::Winner { id: match_id });
             app::emit!(Event::MatchEnded { id: match_id });
         }
 
-        app::emit!(Event::ShotFired { 
-            id: match_id, 
+        app::emit!(Event::ShotFired {
+            id: match_id,
             x: match_state.pending_x.unwrap_or(0),
             y: match_state.pending_y.unwrap_or(0),
-            result: &result 
+            result: &result
         });
 
         Ok(result)
@@ -428,8 +433,9 @@ impl BattleshipState {
         let caller = PublicKey::from_executor_id()?;
         let key = match_id.to_string();
         let priv_boards = PrivateBoards::private_load_or_default()?;
-        let pb = priv_boards.boards.get(&key)?
-            .ok_or_else(|| calimero_sdk::types::Error::from(GameError::NotFound(match_id.to_string())))?;
+        let pb = priv_boards.boards.get(&key)?.ok_or_else(|| {
+            calimero_sdk::types::Error::from(GameError::NotFound(match_id.to_string()))
+        })?;
 
         let mut board = pb.get_board().0.clone();
 
@@ -445,7 +451,10 @@ impl BattleshipState {
             }
         }
 
-        Ok(OwnBoardView { size: BOARD_SIZE, board })
+        Ok(OwnBoardView {
+            size: BOARD_SIZE,
+            board,
+        })
     }
 
     pub fn get_shots(&self, match_id: &str) -> app::Result<ShotsView> {
@@ -460,16 +469,15 @@ impl BattleshipState {
         }
 
         let shots = match_state.get_shots_for_player(&caller);
-        Ok(ShotsView { size: BOARD_SIZE, shots: shots.0.clone() })
+        Ok(ShotsView {
+            size: BOARD_SIZE,
+            shots: shots.0.clone(),
+        })
     }
 
     pub fn get_matches(&self) -> app::Result<Vec<String>> {
         let priv_boards = PrivateBoards::private_load_or_default()?;
-        let ids: Vec<String> = priv_boards
-            .boards
-            .entries()?
-            .map(|(k, _)| k)
-            .collect();
+        let ids: Vec<String> = priv_boards.boards.entries()?.map(|(k, _)| k).collect();
         Ok(ids)
     }
 
@@ -483,5 +491,12 @@ impl BattleshipState {
 
     pub fn get_current_user(&self) -> app::Result<String> {
         Ok(PublicKey::from_executor_id()?.to_base58())
+    }
+
+    // Handlers must have the same parameters as the events they are emitting for now
+    // (same name, same number of parameters, same types)
+    pub fn acknowledge_shot_handler(&mut self, id: &str, x: u8, y: u8) -> app::Result<()> {
+        self.acknowledge_shot(id)?;
+        Ok(())
     }
 }

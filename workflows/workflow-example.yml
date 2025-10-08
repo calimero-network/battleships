@@ -8,7 +8,7 @@ auth_service: true
 nodes:
   chain_id: testnet-1
   count: 2
-  image: ghcr.io/calimero-network/merod:edge
+  image: ghcr.io/calimero-network/merod:450fd87
   prefix: calimero-node
 
 steps:
@@ -153,20 +153,6 @@ steps:
         json: true
         path: output
 
-  - name: Bob Acknowledges Shot
-    type: call
-    node: calimero-node-2
-    context_id: "{{context_id}}"
-    executor_public_key: "{{public_key}}"
-    method: acknowledge_shot
-    args:
-      match_id: "{{match_id}}"
-    outputs:
-      ack1:
-        field: result
-        json: true
-        path: output
-
   # Optional: Bob proposes, Alice acknowledges
   - name: Bob Proposes Shot
     type: call
@@ -180,20 +166,6 @@ steps:
       y: 0
     outputs:
       propose2:
-        field: result
-        json: true
-        path: output
-
-  - name: Alice Acknowledges Shot
-    type: call
-    node: calimero-node-1
-    context_id: "{{context_id}}"
-    executor_public_key: "{{member_public_key}}"
-    method: acknowledge_shot
-    args:
-      match_id: "{{match_id}}"
-    outputs:
-      ack2:
         field: result
         json: true
         path: output

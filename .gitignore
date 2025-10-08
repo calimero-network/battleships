@@ -1,5 +1,5 @@
 # Rust
-/target/
+target/
 Cargo.lock
 **/*.rs.bk
 
@@ -10,6 +10,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# Calimero nodes data folder
+/data
 
 # Build outputs
 dist/

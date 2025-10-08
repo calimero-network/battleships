@@ -47,11 +47,11 @@
 //! println!("Shot result: {}", result);
 //! ```
 
+use crate::board::{Board, Cell, BOARD_SIZE};
+use crate::players::{PlayerBoard, PublicKey};
+use crate::GameError;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
-use crate::board::{Board, Cell, BOARD_SIZE};
-use crate::players::{PublicKey, PlayerBoard};
-use crate::GameError;
 
 // ============================================================================
 // GAME MODULE - Core game logic and match management
@@ -217,7 +217,9 @@ impl Match {
     }
 
     pub fn acknowledge_shot(&mut self, target: PublicKey) -> Result<String, GameError> {
-        let pending_target = self.pending_target.as_ref()
+        let pending_target = self
+            .pending_target
+            .as_ref()
             .ok_or_else(|| GameError::Invalid("no pending shot"))?;
 
         if *pending_target != target {
@@ -231,7 +233,10 @@ impl Match {
     pub fn resolve_shot(&mut self, is_hit: bool) -> String {
         let x = self.pending_x.take().expect("pending x should exist");
         let y = self.pending_y.take().expect("pending y should exist");
-        let shooter = self.pending_shooter.take().expect("pending shooter should exist");
+        let shooter = self
+            .pending_shooter
+            .take()
+            .expect("pending shooter should exist");
         self.pending_target = None;
 
         let result = if is_hit { "hit" } else { "miss" };
@@ -301,25 +306,33 @@ impl ShotResolver {
         match_state: &mut Match,
         target_board: &mut PlayerBoard,
     ) -> Result<String, GameError> {
-        let x = match_state.pending_x
+        let x = match_state
+            .pending_x
             .ok_or_else(|| GameError::Invalid("no pending shot"))?;
-        let y = match_state.pending_y
+        let y = match_state
+            .pending_y
             .ok_or_else(|| GameError::Invalid("no pending shot"))?;
-        let shooter = match_state.pending_shooter.as_ref()
+        let shooter = match_state
+            .pending_shooter
+            .as_ref()
             .ok_or_else(|| GameError::Invalid("no pending shot"))?;
 
         let cur = target_board.get_board().get(BOARD_SIZE, x, y);
         let is_hit = matches!(cur, Cell::Ship);
 
         if is_hit {
-            target_board.get_board_mut().set(BOARD_SIZE, x, y, Cell::Hit);
+            target_board
+                .get_board_mut()
+                .set(BOARD_SIZE, x, y, Cell::Hit);
             target_board.decrement_ships();
-            
+
             if target_board.get_ship_count() == 0 {
                 match_state.set_winner(shooter.clone());
             }
         } else {
-            target_board.get_board_mut().set(BOARD_SIZE, x, y, Cell::Miss);
+            target_board
+                .get_board_mut()
+                .set(BOARD_SIZE, x, y, Cell::Miss);
         }
 
         Ok(match_state.resolve_shot(is_hit))

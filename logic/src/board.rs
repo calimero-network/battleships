@@ -36,9 +36,9 @@
 //! assert_eq!(cell, Cell::Ship);
 //! ```
 
+use crate::GameError;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
-use crate::GameError;
 
 // ============================================================================
 // BOARD MODULE - Everything related to game boards and coordinates
@@ -65,7 +65,19 @@ pub const BOARD_SIZE: u8 = 10;
 /// assert_eq!(coord.y, 3);
 /// assert!(coord.is_valid());
 /// ```
-#[derive(Debug, Clone, Copy, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
 pub struct Coordinate {
@@ -108,20 +120,22 @@ impl Coordinate {
 /// assert_eq!(cell.to_u8(), 1);
 /// assert_eq!(Cell::from_u8(1), Cell::Ship);
 /// ```
-#[derive(Debug, Clone, Copy, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq,
+)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
-pub enum Cell { 
+pub enum Cell {
     /// Empty cell (no ship, no shot)
-    Empty, 
+    Empty,
     /// Cell contains part of a ship
-    Ship, 
+    Ship,
     /// Cell was shot and contains a hit ship
-    Hit, 
+    Hit,
     /// Cell was shot but was empty
-    Miss, 
+    Miss,
     /// Cell has a pending shot (not yet resolved)
-    Pending 
+    Pending,
 }
 
 impl Cell {
@@ -172,40 +186,46 @@ impl Cell {
 pub struct Board(pub Vec<u8>);
 
 impl Board {
-    pub fn new_zeroed(size: u8) -> Board { 
-        Board(vec![0; (size as usize) * (size as usize)]) 
+    pub fn new_zeroed(size: u8) -> Board {
+        Board(vec![0; (size as usize) * (size as usize)])
     }
-    
-    pub fn idx(size: u8, x: u8, y: u8) -> usize { 
-        (y as usize) * (size as usize) + (x as usize) 
+
+    pub fn idx(size: u8, x: u8, y: u8) -> usize {
+        (y as usize) * (size as usize) + (x as usize)
     }
-    
-    pub fn in_bounds(size: u8, x: u8, y: u8) -> bool { 
-        x < size && y < size 
+
+    pub fn in_bounds(size: u8, x: u8, y: u8) -> bool {
+        x < size && y < size
     }
-    
-    pub fn get(&self, size: u8, x: u8, y: u8) -> Cell { 
-        Cell::from_u8(self.0[Board::idx(size, x, y)]) 
+
+    pub fn get(&self, size: u8, x: u8, y: u8) -> Cell {
+        Cell::from_u8(self.0[Board::idx(size, x, y)])
     }
-    
-    pub fn set(&mut self, size: u8, x: u8, y: u8, cell: Cell) { 
-        self.0[Board::idx(size, x, y)] = cell.to_u8(); 
+
+    pub fn set(&mut self, size: u8, x: u8, y: u8, cell: Cell) {
+        self.0[Board::idx(size, x, y)] = cell.to_u8();
     }
 
     pub fn is_adjacent_violation(&self, size: u8, x: u8, y: u8) -> bool {
-        let xi = x as i16; 
+        let xi = x as i16;
         let yi = y as i16;
-        for dy in -1..=1 { 
+        for dy in -1..=1 {
             for dx in -1..=1 {
-                if dx == 0 && dy == 0 { continue; }
-                let nx = xi + dx; 
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let nx = xi + dx;
                 let ny = yi + dy;
-                if nx < 0 || ny < 0 { continue; }
-                let nxu = nx as u8; 
+                if nx < 0 || ny < 0 {
+                    continue;
+                }
+                let nxu = nx as u8;
                 let nyu = ny as u8;
-                if nxu >= size || nyu >= size { continue; }
-                if matches!(self.get(size, nxu, nyu), Cell::Ship) { 
-                    return true; 
+                if nxu >= size || nyu >= size {
+                    continue;
+                }
+                if matches!(self.get(size, nxu, nyu), Cell::Ship) {
+                    return true;
                 }
             }
         }

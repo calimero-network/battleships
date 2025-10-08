@@ -42,14 +42,14 @@
 //! assert!(board.is_placed());
 //! ```
 
-use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
-use calimero_sdk::serde::{Deserialize, Serialize};
-use calimero_storage::collections::UnorderedMap;
-use bs58;
 use crate::board::{Board, Cell, BOARD_SIZE};
 use crate::ships::ShipValidator;
 use crate::validation::validate_fleet_composition;
 use crate::GameError;
+use bs58;
+use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
+use calimero_sdk::serde::{Deserialize, Serialize};
+use calimero_storage::collections::UnorderedMap;
 
 // ============================================================================
 // PLAYERS MODULE - Everything related to player management and boards
@@ -81,8 +81,8 @@ pub struct PublicKey(pub [u8; 32]);
 impl PublicKey {
     pub fn from_executor_id() -> Result<PublicKey, GameError> {
         let v = calimero_sdk::env::executor_id();
-        if v.len() != 32 { 
-            return Err(GameError::Invalid("executor id length")); 
+        if v.len() != 32 {
+            return Err(GameError::Invalid("executor id length"));
         }
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&v);
@@ -93,11 +93,11 @@ impl PublicKey {
         let decoded = bs58::decode(encoded)
             .into_vec()
             .map_err(|_| GameError::Invalid("bad base58 key"))?;
-        if decoded.len() != 32 { 
-            return Err(GameError::Invalid("key length")); 
+        if decoded.len() != 32 {
+            return Err(GameError::Invalid("key length"));
         }
-        let mut arr = [0u8; 32]; 
-        arr.copy_from_slice(&decoded); 
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&decoded);
         Ok(PublicKey(arr))
     }
 
@@ -138,22 +138,22 @@ impl PublicKey {
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
-pub struct PlayerBoard { 
+pub struct PlayerBoard {
     /// The player's private board with ship placements
-    own: Board, 
+    own: Board,
     /// Number of ships remaining (decremented when hit)
-    ships: u64, 
+    ships: u64,
     /// Whether the player has finished placing their ships
-    placed: bool 
+    placed: bool,
 }
 
 impl PlayerBoard {
-    pub fn new() -> PlayerBoard { 
-        PlayerBoard { 
-            own: Board::new_zeroed(BOARD_SIZE), 
-            ships: 0, 
-            placed: false 
-        } 
+    pub fn new() -> PlayerBoard {
+        PlayerBoard {
+            own: Board::new_zeroed(BOARD_SIZE),
+            ships: 0,
+            placed: false,
+        }
     }
 
     pub fn place_ships(&mut self, ships: Vec<String>) -> Result<(), GameError> {
@@ -167,7 +167,9 @@ impl PlayerBoard {
 
         for group in ships.iter() {
             let coords = ShipValidator::parse_ship_coords(group)?;
-            if coords.is_empty() { continue; }
+            if coords.is_empty() {
+                continue;
+            }
 
             let ship_len = coords.len();
             if ship_len < 2 || ship_len > 5 {
@@ -203,7 +205,10 @@ impl PlayerBoard {
         Ok(())
     }
 
-    fn validate_fleet_composition(ship_counts: [usize; 4], ship_coordinates: Vec<Vec<crate::board::Coordinate>>) -> Result<(), GameError> {
+    fn validate_fleet_composition(
+        ship_counts: [usize; 4],
+        ship_coordinates: Vec<Vec<crate::board::Coordinate>>,
+    ) -> Result<(), GameError> {
         // Use the validation strategy pattern
         validate_fleet_composition(ship_counts, ship_coordinates)
     }
@@ -238,18 +243,20 @@ impl PlayerBoard {
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[calimero_sdk::app::private]
-pub struct PrivateBoards { 
-    pub boards: UnorderedMap<String, PlayerBoard> 
+pub struct PrivateBoards {
+    pub boards: UnorderedMap<String, PlayerBoard>,
 }
 
-impl Default for PrivateBoards { 
-    fn default() -> PrivateBoards { 
-        PrivateBoards { boards: UnorderedMap::new() } 
-    } 
+impl Default for PrivateBoards {
+    fn default() -> PrivateBoards {
+        PrivateBoards {
+            boards: UnorderedMap::new(),
+        }
+    }
 }
 
-impl PrivateBoards { 
-    pub fn key(match_id: &str) -> String { 
-        match_id.to_string() 
-    } 
+impl PrivateBoards {
+    pub fn key(match_id: &str) -> String {
+        match_id.to_string()
+    }
 }

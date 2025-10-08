@@ -71,7 +71,12 @@ pub enum Event<'a> {
     /// Emitted when a player proposes a shot
     ShotProposed { id: &'a str, x: u8, y: u8 },
     /// Emitted when a shot is resolved (hit/miss)
-    ShotFired { id: &'a str, x: u8, y: u8, result: &'a str },
+    ShotFired {
+        id: &'a str,
+        x: u8,
+        y: u8,
+        result: &'a str,
+    },
     /// Emitted when a winner is determined
     Winner { id: &'a str },
     /// Emitted when a match is completed

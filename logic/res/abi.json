@@ -179,6 +179,32 @@
       "returns": {
         "kind": "string"
       }
+    },
+    {
+      "name": "acknowledge_shot_handler",
+      "params": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "x",
+          "type": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "y",
+          "type": {
+            "kind": "u32"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      }
     }
   ],
   "events": []

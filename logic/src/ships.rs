@@ -54,11 +54,11 @@
 //! let fleet = Fleet::new(ships)?;
 //! ```
 
+use crate::board::{Board, Coordinate};
+use crate::validation::{validate_fleet_composition, validate_ship_placement};
+use crate::GameError;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
-use crate::board::{Coordinate, Board};
-use crate::validation::{validate_ship_placement, validate_fleet_composition};
-use crate::GameError;
 
 // ============================================================================
 // SHIPS MODULE - Everything related to ship placement and validation
@@ -123,7 +123,10 @@ impl Ship {
             }
         }
 
-        Ok(Ship { coordinates, length })
+        Ok(Ship {
+            coordinates,
+            length,
+        })
     }
 
     pub fn is_straight(&self) -> bool {
@@ -131,9 +134,15 @@ impl Ship {
             return true;
         }
 
-        let same_x = self.coordinates.iter().all(|coord| coord.x == self.coordinates[0].x);
-        let same_y = self.coordinates.iter().all(|coord| coord.y == self.coordinates[0].y);
-        
+        let same_x = self
+            .coordinates
+            .iter()
+            .all(|coord| coord.x == self.coordinates[0].x);
+        let same_y = self
+            .coordinates
+            .iter()
+            .all(|coord| coord.y == self.coordinates[0].y);
+
         same_x ^ same_y // XOR: either all same X or all same Y, but not both
     }
 
@@ -142,15 +151,18 @@ impl Ship {
             return true;
         }
 
-        let same_x = self.coordinates.iter().all(|coord| coord.x == self.coordinates[0].x);
+        let same_x = self
+            .coordinates
+            .iter()
+            .all(|coord| coord.x == self.coordinates[0].x);
         let mut sorted = self.coordinates.clone();
-        
-        if same_x { 
-            sorted.sort_by_key(|coord| coord.y); 
-        } else { 
-            sorted.sort_by_key(|coord| coord.x); 
+
+        if same_x {
+            sorted.sort_by_key(|coord| coord.y);
+        } else {
+            sorted.sort_by_key(|coord| coord.x);
         }
-        
+
         for window in sorted.windows(2) {
             let a = window[0];
             let b = window[1];
@@ -234,7 +246,7 @@ impl Fleet {
     pub fn new(ships: Vec<Ship>) -> Result<Fleet, GameError> {
         // Calculate ship counts for validation
         let mut ship_counts = [0; 4]; // [2,3,4,5] lengths
-        
+
         for ship in &ships {
             let idx = (ship.length - 2) as usize;
             if idx >= 4 {
@@ -244,9 +256,8 @@ impl Fleet {
         }
 
         // Extract ship coordinates for validation
-        let ship_coordinates: Vec<Vec<Coordinate>> = ships.iter()
-            .map(|ship| ship.coordinates.clone())
-            .collect();
+        let ship_coordinates: Vec<Vec<Coordinate>> =
+            ships.iter().map(|ship| ship.coordinates.clone()).collect();
 
         // Use the validation strategy pattern for fleet composition
         validate_fleet_composition(ship_counts, ship_coordinates)?;
@@ -272,9 +283,9 @@ pub struct ShipValidator;
 impl ShipValidator {
     /// Validates ship placement using the validation strategy pattern
     pub fn validate_ship_placement(
-        board: &Board, 
-        size: u8, 
-        coords: &[Coordinate]
+        board: &Board,
+        size: u8,
+        coords: &[Coordinate],
     ) -> Result<(), GameError> {
         if coords.is_empty() {
             return Err(GameError::Invalid("empty ship"));
@@ -290,17 +301,19 @@ impl ShipValidator {
             .split(';')
             .filter_map(|p| {
                 let p = p.trim();
-                if p.is_empty() { return None; }
+                if p.is_empty() {
+                    return None;
+                }
                 let mut it = p.split(',');
                 let sx = it.next().unwrap_or("");
                 let sy = it.next().unwrap_or("");
-                let x: u8 = match sx.parse() { 
-                    Ok(v) => v, 
-                    Err(_) => return None 
+                let x: u8 = match sx.parse() {
+                    Ok(v) => v,
+                    Err(_) => return None,
                 };
-                let y: u8 = match sy.parse() { 
-                    Ok(v) => v, 
-                    Err(_) => return None 
+                let y: u8 = match sy.parse() {
+                    Ok(v) => v,
+                    Err(_) => return None,
                 };
                 Coordinate::new(x, y).ok()
             })

@@ -8,7 +8,7 @@ import Authenticate from './pages/login/Authenticate';
 
 export default function App() {
   const [clientAppId] = useState<string>(
-    'BzdMhCgaHDKeNBzER72rT9c3k85Xp3Ry6RDDmXzAEQJF',
+    '2zfSUYdiLcM9aKXfpxVTp6gp4FRTR1FnVYtaxxaGRu3Z',
   );
 
   return (
