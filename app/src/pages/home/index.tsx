@@ -26,6 +26,7 @@ import {
   ConnectionType,
 } from '@calimero-network/calimero-client';
 import { createKvClient, AbiClient } from '../../features/kv/api';
+import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 
 type BoardView = { size: number; own: number[]; shots: number[] };
 
@@ -53,6 +54,17 @@ export default function HomePage() {
   } | null>(null);
   const [board, setBoard] = useState<BoardView | null>(null);
   const loadingRef = useRef<boolean>(false);
+
+  // Game event subscriptions
+  const { isSubscribed: isEventSubscribed } = useGameSubscriptions({
+    contextId: currentContext?.contextId || '',
+    matchId,
+    onBoardUpdate: () => {
+      // Auto-refresh board when events occur
+      refreshBoard();
+    },
+  });
+
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -312,6 +324,19 @@ export default function HomePage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
                     <Button type="button" variant="warning" onClick={agreeEnd}>Agree End</Button>
                     <Button type="button" variant="secondary" onClick={refreshBoard}>Refresh</Button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div 
+                        style={{ 
+                          width: '8px', 
+                          height: '8px', 
+                          borderRadius: '50%', 
+                          backgroundColor: isEventSubscribed ? '#10b981' : '#f59e0b' 
+                        }} 
+                      />
+                      <Text size="sm" color="muted">
+                        {isEventSubscribed ? 'Live Updates' : 'Offline'}
+                      </Text>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

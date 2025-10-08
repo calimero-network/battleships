@@ -228,7 +228,7 @@ pub enum GameError {
 /// let state = BattleshipState::init();
 /// let match_id = state.create_match("player2_key".to_string())?;
 /// ```
-#[app::state]
+#[app::state(emits = for<'a> Event<'a>)]
 #[derive(Debug, BorshSerialize, BorshDeserialize)]
 #[borsh(crate = "calimero_sdk::borsh")]
 pub struct BattleshipState {

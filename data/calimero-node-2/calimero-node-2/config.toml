@@ -1,6 +1,6 @@
 [identity]
-peer_id = "12D3KooWCecU48itb6HMyuZ19ykw4r71BsMvsixHwaisRS9n7SXr"
-keypair = "23jhTfbkBf7cPX4FWh7kaGwr9dEfUmhm1Bi43tF2uuk1gZhaCn59nsHcsp3HtCVasNDpTft8doFYGstTR6yx8XSVf2j6p"
+peer_id = "12D3KooWQcsB8xSyHvuWsZSCPtKgtxBpMHnG6jdzmNeFk3ap2TAV"
+keypair = "23jhTdCesiFPv8VD5ETTPuUwQARrF1vqb7tBi3amxZAktsevYRHnmsmmrV4cuoqy4ivBUd2oJFWo7tmezojQPbRUUyci1"
 
 [swarm]
 listen = [
@@ -83,41 +83,41 @@ url = "http://3.125.79.112:63529/"
 
 [context.config.signer.self.ethereum.sepolia]
 rpc_url = "https://sepolia.drpc.org/"
-account_id = "0x8ba8eF0CAE5c040a4625E28409Cd421b07479E31"
-secret_key = "98c8d92f719811870a6cac5b6ecebb82c4813f9805bbc65013b39ec96d6986f3"
+account_id = "0x382d72992FA5E4C44b1950a1f7819E1D44148F34"
+secret_key = "323ac269998b32eaab3d827c03141e6f6ea81f21f000e432ed06e8452e721439"
 
 [context.config.signer.self.icp.ic]
 rpc_url = "https://ic0.app/"
-account_id = "asjzn-iihpn-hxc3w-4lc6p-z5pkx-c4ine-zp4j4-sxgqi-44zi3-h3ttq-oqe"
-public_key = "077b4f716edc58bcfcf5eab8b886932fe2792b9a08e7328d9f739c1d02"
-secret_key = "58f2bb1882dd570b078cdfd49aa97f03be784533631601c2ac9f8d962b79bd19"
+account_id = "ufmrq-wzqyr-ndm5x-mu77t-k5gx6-uix4e-z7nyx-q7n2i-gv6gp-xv7ch-lqe"
+public_key = "30c45a3676eca7ff3574d7f5117e133f6e2f0fb748357c67debf11d702"
+secret_key = "ed1f40c363c1b711afabb14fd2c5f40b71e0245378f57cbe1eb0df7ef9751deb"
 
 [context.config.signer.self.icp.local]
 rpc_url = "http://127.0.0.1:4943/"
-account_id = "d5z3m-o4n7v-oita5-tg7fv-bcgcn-zpshn-4fqo4-dnh7i-4iplf-6phmk-rae"
-public_key = "8dfd5c8983b337cb5088c26e5f23b78583b8369fe8e21eb2f9e762a202"
-secret_key = "40bca73c8a80e4f9518d888ef5271bc53fb6cdb21a3894303f8323f7b85d81f7"
+account_id = "f43ky-fs6cr-zif6s-77rj5-jh4hd-qubbl-6v3jw-td3tt-kin2l-fxenr-tqe"
+public_key = "5e147282fa5ffc53d49f871c2810afd5da6d31ee73521ba596e46c6702"
+secret_key = "c6f55fcf995146e9b6dc37904c971b72a4509728cfd7a39aa2776fa84b185bee"
 
 [context.config.signer.self.near.mainnet]
 rpc_url = "https://rpc.mainnet.near.org/"
-account_id = "d54712b20ae4473e8ada1a974c2b49f5a45f14138f86111b1100d677d82cc3e0"
-public_key = "ed25519:FMYhRcJdjSAYcGm6eZLy8LCjZAoJCKGCvpdJRBvtrWiB"
-secret_key = "ed25519:3c3hgLQpTPnkGAoQyzweSAUjuBEvyJwP3FnMHUBbtPMBd3aCieBTaiuzziL1qWMfjY8PawwiUjQYTzsr2caLHKN7"
+account_id = "48bd9d7314c43bac752be5d9ccada306a25e80a0cfed1c0a1ec898f17c252729"
+public_key = "ed25519:5tx3wgnVyT9Yr2moNcWGYRcWjHRHgjh8SWpQhxnV4kJk"
+secret_key = "ed25519:4QeMAjg4m8P6RKJxwe95yjGfpfD3L1ZSxysy417REcFi2w4mys6MSGxi3yrVV3DEq4Vkcdt5s92w4foLqnrgSuxk"
 
 [context.config.signer.self.near.testnet]
 rpc_url = "https://rpc.testnet.near.org/"
-account_id = "5be23651b362055ec708041e2c9179f23d930c490ddd2d5a89e37dc572636764"
-public_key = "ed25519:7BgAVgadHBzK6KxNPPy6416gC17RLxbpwFZfHAMrRZ2T"
-secret_key = "ed25519:59Ao7ttA8cwJCdTm5wbo6HbpVVMfaYKFqMADA5VbJVaiYPDhSzMxV43peVcP6GZBuzUfJWRhh2y268QQtP4Xjjmu"
+account_id = "befb85a910ec0709de27d5bfacdcd95b37b76ba2b0c596b480372222a82bfea9"
+public_key = "ed25519:DrWunFq7QEvRBnNV49DrJA5WCZiT3ouHujk2DXGsNJcG"
+secret_key = "ed25519:44nyTPyNVF47DpHR6nLfrB56sTMSRHjZcvPvA4cvTnQaMC2rdC8KU92VeaquuRBqLJK8wxYJd9tAEbu7HTX4ztPi"
 
 [context.config.signer.self.starknet.mainnet]
 rpc_url = "https://cloud.argent-api.com/v1/starknet/mainnet/rpc/v0.7"
-account_id = "0x449fcdc25effd63179f974765557647bb4d1f64f62bda22d167b3580df76b3e"
-public_key = "0x449fcdc25effd63179f974765557647bb4d1f64f62bda22d167b3580df76b3e"
-secret_key = "0x768c499c0b54be31b27adaa1e90e846b127cb6ccdbb3abf980fe41ac8466be4"
+account_id = "0x5ad093b279d4aec29224a1a5559edd8bd4011a95313feab8a4d0062c2a0b165"
+public_key = "0x5ad093b279d4aec29224a1a5559edd8bd4011a95313feab8a4d0062c2a0b165"
+secret_key = "0x376bf274ca793e697f8406f4ac79d0439347ae26e0d8dfdf2228594f57b3055"
 
 [context.config.signer.self.starknet.sepolia]
 rpc_url = "https://free-rpc.nethermind.io/sepolia-juno/"
-account_id = "0x1d6393adc5fc4f4f09e7fbca123965a3e031dc1a1597672cbb52ee0d8af09dd"
-public_key = "0x1d6393adc5fc4f4f09e7fbca123965a3e031dc1a1597672cbb52ee0d8af09dd"
-secret_key = "0x4e766b35ee5f057db026a44d98e9f82a82b4fd46bf3112917b3ed9e3fa7415a"
+account_id = "0x7b5dd7b3ede2d5a9fd5741cae833b87dab3528a6731b8d6322b6006ce2082f7"
+public_key = "0x7b5dd7b3ede2d5a9fd5741cae833b87dab3528a6731b8d6322b6006ce2082f7"
+secret_key = "0x5f635fc852f6594bc81d5fe170677147eff4421693ea04f774ee9b220bbe1e5"

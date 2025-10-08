@@ -1,65 +1,26 @@
 {
-  "name": "battleship-calimero",
-  "version": "0.1.0",
-  "description": "A complete implementation of the classic Battleship game built on the Calimero SDK",
-  "private": true,
-  "workspaces": [
-    "app"
-  ],
   "scripts": {
-    "install:all": "npm install && cd app && npm install",
-    "build:all": "npm run build:backend && npm run build:frontend",
-    "build:backend": "cd logic && ./build.sh",
-    "build:frontend": "cd app && npm run build",
-    "test:all": "npm run test:backend && npm run test:frontend",
-    "test:backend": "cd logic && cargo test",
-    "test:frontend": "cd app && npm test",
-    "dev": "cd app && npm start",
-    "docs": "cd logic && cargo doc --open",
-    "lint:all": "npm run lint:backend && npm run lint:frontend",
-    "lint:backend": "cd logic && cargo clippy",
-    "lint:frontend": "cd app && npm run lint",
-    "format:all": "npm run format:backend && npm run format:frontend",
-    "format:backend": "cd logic && cargo fmt",
-    "format:frontend": "cd app && npm run format"
-  },
-  "keywords": [
-    "battleship",
-    "game",
-    "calimero",
-    "blockchain",
-    "rust",
-    "react",
-    "typescript",
-    "wasm",
-    "multiplayer"
-  ],
-  "author": "Battleship Game Contributors",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-username/battleship-calimero.git"
-  },
-  "bugs": {
-    "url": "https://github.com/your-username/battleship-calimero/issues"
-  },
-  "homepage": "https://github.com/your-username/battleship-calimero#readme",
-  "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=8.0.0"
+    "prepare": "husky",
+    "logic:build": "bash ./logic/build.sh",
+    "logic:clean": "rm -rf ./logic/target ./logic/res",
+    "logic:sync": "bash ./scripts/sync-wasm.sh",
+    "logic:watch": "chokidar \"logic/res/**/*\" -c \"node scripts/on-res-change.mjs {path}\"",
+    "app:install": "pnpm --dir app install",
+    "app:dev": "concurrently -n web,res -c green,magenta \"pnpm --dir app dev\" \"pnpm run logic:watch\"",
+    "app:build": "pnpm --dir app build",
+    "app:preview": "pnpm --dir app preview",
+    "app:generate-client": "npx @calimero-network/abi-codegen@0.1.1 -i logic/res/abi.json -o app/src/api ",
+    "network:bootstrap": "npx @calimero-network/merobox-js@latest bootstrap run workflows/workflow-example.yml"
   },
   "devDependencies": {
-    "husky": "^8.0.3",
-    "lint-staged": "^13.2.0"
+    "@calimero-network/merobox-js": "^0.0.3",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^9.2.1",
+    "husky": "^9.0.11"
   },
-  "lint-staged": {
-    "app/**/*.{js,jsx,ts,tsx}": [
-      "cd app && npm run lint",
-      "cd app && npm run format"
-    ],
-    "logic/**/*.rs": [
-      "cd logic && cargo fmt",
-      "cd logic && cargo clippy"
-    ]
-  }
+  "dependencies": {
+    "@calimero-network/mero-icons": "^0.0.4",
+    "@calimero-network/mero-ui": "^0.3.4"
+  },
+  "name": "battleship"
 }

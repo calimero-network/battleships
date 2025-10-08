@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Card, CardContent, CardHeader, CardTitle, Grid, GridItem, Input, Navbar as MeroNavbar, NavbarBrand, NavbarMenu, NavbarItem, Menu, MenuGroup, MenuItem, Text, useToast, CopyToClipboard } from '@calimero-network/mero-ui';
 import { CalimeroConnectButton, ConnectionType, useCalimero } from '@calimero-network/calimero-client';
 import { createKvClient, AbiClient } from '../../features/kv/api';
+import type { AllGameEvents } from '../../types/events';
+import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 
 export default function MatchPage() {
   const navigate = useNavigate();
@@ -30,6 +32,7 @@ export default function MatchPage() {
   const [currentTurn, setCurrentTurn] = useState<string | null>(null);
   const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [pendingShot, setPendingShot] = useState<{ x: number; y: number } | null>(null);
   
   // Ship placement
   const [grid, setGrid] = useState<boolean[][]>(() => Array.from({ length: 10 }, () => Array(10).fill(false)));
@@ -48,6 +51,63 @@ export default function MatchPage() {
   const loadingRef = useRef<boolean>(false);
 
   useEffect(() => { if (!isAuthenticated) navigate('/'); }, [isAuthenticated, navigate]);
+
+  const loadBoards = useCallback(async ()=>{
+    if (!api || !matchId) return;
+    try {
+      const own = await api.getOwnBoard({ match_id: matchId });
+      const shots = await api.getShots({ match_id: matchId });
+      setSize(own.size);
+      const ownArr = own.board.toArray();
+      const shotsArr = shots.shots.toArray();
+      setOwnBoard(ownArr);
+      setShotsBoard(shotsArr);
+      const anyShip = ownArr.some(v => v === 1 || v === 2 || v === 3);
+      setPlaced(anyShip);
+    } catch (e) {
+      // ignore
+    }
+  }, [api, matchId]);
+
+  const loadTurnInfo = useCallback(async () => {
+    if (!api || !matchId) return;
+    try {
+      const turn = await api.getCurrentTurn();
+      setCurrentTurn(turn);
+      // Compare current user with turn
+      if (currentUser && turn) {
+        setIsMyTurn(currentUser === turn);
+      }
+    } catch (e) {
+      console.error('Failed to load turn info:', e);
+    }
+  }, [api, matchId, currentUser]);
+
+  // Game event subscriptions
+  const { isSubscribed: isEventSubscribed, events: gameEvents } = useGameSubscriptions({
+    contextId: currentContext?.contextId || '',
+    matchId,
+    onBoardUpdate: () => {
+      // Auto-refresh board when events occur
+      loadBoards();
+      loadTurnInfo();
+    },
+    onTurnUpdate: () => {
+      // Auto-refresh turn info when shots are fired
+      loadTurnInfo();
+    },
+    onGameEvent: (event: AllGameEvents) => {
+      if (event.type === 'ShotProposed') {
+        // If it's not our turn, we are the target → overlay pending on our board
+        if (!isMyTurn && typeof event.x === 'number' && typeof event.y === 'number') {
+          setPendingShot({ x: event.x, y: event.y });
+        }
+      }
+      if (event.type === 'ShotFired' || event.type === 'MatchEnded' || event.type === 'Winner') {
+        setPendingShot(null);
+      }
+    },
+  });
 
   useEffect(() => {
     if (!app) return;
@@ -104,38 +164,7 @@ export default function MatchPage() {
     setMatchId(id);
     setView('game');
     loadBoards();
-  }, []);
-
-  const loadBoards = useCallback(async ()=>{
-    if (!api || !matchId) return;
-    try {
-      const own = await api.getOwnBoard({ match_id: matchId });
-      const shots = await api.getShots({ match_id: matchId });
-      setSize(own.size);
-      const ownArr = own.board.toArray();
-      const shotsArr = shots.shots.toArray();
-      setOwnBoard(ownArr);
-      setShotsBoard(shotsArr);
-      const anyShip = ownArr.some(v => v === 1 || v === 2 || v === 3);
-      setPlaced(anyShip);
-    } catch (e) {
-      // ignore
-    }
-  }, [api, matchId]);
-
-  const loadTurnInfo = useCallback(async () => {
-    if (!api || !matchId) return;
-    try {
-      const turn = await api.getCurrentTurn();
-      setCurrentTurn(turn);
-      // Compare current user with turn
-      if (currentUser && turn) {
-        setIsMyTurn(currentUser === turn);
-      }
-    } catch (e) {
-      console.error('Failed to load turn info:', e);
-    }
-  }, [api, matchId, currentUser]);
+  }, [loadBoards]);
 
   useEffect(()=>{ 
     if (view === 'game') {
@@ -191,6 +220,8 @@ export default function MatchPage() {
       // Clear selection after successful shot
       setSelectedShotX(null);
       setSelectedShotY(null);
+      // Shooter side should not show pending overlay on own board
+      setPendingShot(null);
     } catch (e) {
       console.error('proposeShot', e);
       show({ title: e instanceof Error ? e.message : 'Failed to propose shot', variant: 'error' });
@@ -215,6 +246,7 @@ export default function MatchPage() {
       show({ title: `Shot resolved: ${res}`, variant: 'success' });
       await loadBoards();
       await loadTurnInfo();
+      setPendingShot(null);
     } catch (e) {
       console.error('acknowledgeShot', e);
       show({ title: e instanceof Error ? e.message : 'Failed to acknowledge', variant: 'error' });
@@ -338,7 +370,15 @@ export default function MatchPage() {
               if (val === 1) bg = '#10b981'; // Ship (green)
               else if (val === 2) bg = '#ef4444'; // Hit ship (red)
               else if (val === 3) bg = '#374151'; // Miss (gray)
-              else if (val === 4) bg = '#f59e0b'; // Pending shot (yellow)
+              else if (val === 4) bg = '#f59e0b'; // Pending shot (yellow from API)
+
+              // Overlay pending shot from event if targeted at us
+              if (pendingShot && pendingShot.x === x && pendingShot.y === y) {
+                // Do not override a hit; only overlay on empty/ship/miss
+                if (val !== 2) {
+                  bg = '#f59e0b';
+                }
+              }
               
               return (
                 <div 
@@ -360,7 +400,7 @@ export default function MatchPage() {
         </div>
       </div>
     );
-  }, [ownBoard, size]);
+  }, [ownBoard, size, pendingShot]);
 
   const renderShotsBoard = useCallback(() => {
     return (
@@ -554,6 +594,19 @@ export default function MatchPage() {
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
                     <Button variant="secondary" onClick={() => { loadBoards(); loadTurnInfo(); }}>Refresh</Button>
                     <Text size="sm" color="muted">Status: {placed ? 'Ships placed' : 'Place ships to start'}</Text>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div 
+                        style={{ 
+                          width: '8px', 
+                          height: '8px', 
+                          borderRadius: '50%', 
+                          backgroundColor: isEventSubscribed ? '#10b981' : '#f59e0b' 
+                        }} 
+                      />
+                      <Text size="sm" color="muted">
+                        {isEventSubscribed ? 'Live Updates' : 'Offline'}
+                      </Text>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
