@@ -8,7 +8,7 @@ auth_service: true
 nodes:
   chain_id: testnet-1
   count: 2
-  image: ghcr.io/calimero-network/merod:450fd87
+  image: ghcr.io/calimero-network/merod:0.9.0
   prefix: calimero-node
 
 steps:
