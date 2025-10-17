@@ -270,7 +270,7 @@ export class AbiClient {
       {},
     );
     if (response.success) {
-      return (response.result as string | null);
+      return response.result as string | null;
     } else {
       throw new Error(response.error || 'Execution failed');
     }
