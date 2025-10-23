@@ -8,7 +8,7 @@ auth_service: true
 nodes:
   chain_id: testnet-1
   count: 2
-  image: ghcr.io/calimero-network/merod:450fd87
+  image: ghcr.io/calimero-network/merod:9804843
   prefix: calimero-node
 
 steps:
@@ -152,6 +152,11 @@ steps:
         field: result
         json: true
         path: output
+
+  # Allow state to propagate before shots
+  - name: Wait After Placement
+    type: wait
+    seconds: 3
 
   # Optional: Bob proposes, Alice acknowledges
   - name: Bob Proposes Shot

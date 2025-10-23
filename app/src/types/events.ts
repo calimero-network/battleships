@@ -1,5 +1,5 @@
 /**
- * Game event types that can be received from the WebSocket connection
+ * Game event types that can be received from the SSE (Server-Sent Events) connection
  * These correspond to the events emitted by the Rust backend
  */
 
@@ -61,9 +61,9 @@ export type AllGameEvents =
   | MatchEndedEvent;
 
 /**
- * WebSocket message structure
+ * SSE message structure
  */
-export interface WebSocketMessage {
+export interface SseMessage {
   type: 'event' | 'error' | 'connected' | 'disconnected';
   data?: AllGameEvents;
   error?: string;

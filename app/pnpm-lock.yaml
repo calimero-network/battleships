@@ -8,8 +8,8 @@ importers:
   .:
     dependencies:
       '@calimero-network/calimero-client':
-        specifier: ^1.19.2
-        version: 1.20.2(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+        specifier: github:calimero-network/calimero-client-js#feat/sse-client-implementation
+        version: https://codeload.github.com/calimero-network/calimero-client-js/tar.gz/0c12f8e5952627eb89671886a78bccc2baa142fe(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
       '@calimero-network/mero-icons':
         specifier: ^0.0.4
         version: 0.0.4(react@19.2.0)
@@ -1124,11 +1124,12 @@ packages:
       }
     engines: { node: '>=6.9.0' }
 
-  '@calimero-network/calimero-client@1.20.2':
+  '@calimero-network/calimero-client@https://codeload.github.com/calimero-network/calimero-client-js/tar.gz/0c12f8e5952627eb89671886a78bccc2baa142fe':
     resolution:
       {
-        integrity: sha512-bOs/xKJy6sIlCCfV8A2aMSt9yzqFrpd5VnMXNim+xgqrk1Ixx82J3k9gvPLzc/g5OsO2uix2bCPORkhOlFKbMQ==,
+        tarball: https://codeload.github.com/calimero-network/calimero-client-js/tar.gz/0c12f8e5952627eb89671886a78bccc2baa142fe,
       }
+    version: 0.0.0
     peerDependencies:
       '@near-wallet-selector/modal-ui': ^8.9.7
       react: ^18.3.0
@@ -7178,7 +7179,7 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
-  '@calimero-network/calimero-client@1.20.2(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))':
+  '@calimero-network/calimero-client@https://codeload.github.com/calimero-network/calimero-client-js/tar.gz/0c12f8e5952627eb89671886a78bccc2baa142fe(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))':
     dependencies:
       '@near-wallet-selector/modal-ui': 8.10.2(near-api-js@3.0.4)
       axios: 1.12.2

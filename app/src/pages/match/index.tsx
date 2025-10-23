@@ -104,13 +104,18 @@ export default function MatchPage() {
   }, [api, matchId]);
 
   const loadTurnInfo = useCallback(async () => {
+    console.log('🔄 loadTurnInfo called', { api: !!api, matchId, currentUser });
     if (!api || !matchId) return;
     try {
       const turn = await api.getCurrentTurn();
+      console.log('  📥 Fetched turn from API:', turn);
+      console.log('  👤 Current user:', currentUser);
       setCurrentTurn(turn);
       // Compare current user with turn
       if (currentUser && turn) {
-        setIsMyTurn(currentUser === turn);
+        const myTurn = currentUser === turn;
+        console.log('  ✅ Setting isMyTurn:', myTurn);
+        setIsMyTurn(myTurn);
       }
     } catch (e) {
       console.error('Failed to load turn info:', e);
@@ -124,11 +129,13 @@ export default function MatchPage() {
       matchId,
       onBoardUpdate: () => {
         // Auto-refresh board when events occur
+        console.log('📋 onBoardUpdate called, current matchId:', matchId, 'currentUser:', currentUser);
         loadBoards();
         loadTurnInfo();
       },
       onTurnUpdate: () => {
         // Auto-refresh turn info when shots are fired
+        console.log('🔄 onTurnUpdate called, current matchId:', matchId, 'currentUser:', currentUser);
         loadTurnInfo();
       },
       onGameEvent: (event: AllGameEvents) => {
@@ -184,6 +191,43 @@ export default function MatchPage() {
           // Debug: log app object to see what's available
           console.log('App object:', app);
           console.log('App keys:', Object.keys(app || {}));
+
+          // Debug SSE connection
+          if (app.eventStream) {
+            console.log('EventStream object:', app.eventStream);
+            if (app.eventStream.eventSource) {
+              const es = app.eventStream.eventSource;
+              console.log('EventSource URL:', es.url);
+              console.log(
+                'EventSource readyState:',
+                es.readyState,
+                es.readyState === 0
+                  ? '(CONNECTING)'
+                  : es.readyState === 1
+                    ? '(OPEN)'
+                    : '(CLOSED)',
+              );
+
+              // Listen for SSE connection events
+              es.addEventListener('open', () => {
+                console.log('✅ EventSource OPENED');
+              });
+              es.addEventListener('error', (e) => {
+                console.error('❌ EventSource ERROR:', e);
+                console.log(
+                  'EventSource readyState after error:',
+                  es.readyState,
+                );
+              });
+              es.addEventListener('message', (e) => {
+                console.log('📨 RAW EventSource message:', e.data);
+              });
+            } else {
+              console.warn('⚠️ No eventSource in eventStream!');
+            }
+          } else {
+            console.warn('⚠️ No eventStream in app!');
+          }
 
           const user = await client.getCurrentUser();
           setCurrentUser(user);
