@@ -129,13 +129,23 @@ export default function MatchPage() {
       matchId,
       onBoardUpdate: () => {
         // Auto-refresh board when events occur
-        console.log('📋 onBoardUpdate called, current matchId:', matchId, 'currentUser:', currentUser);
+        console.log(
+          '📋 onBoardUpdate called, current matchId:',
+          matchId,
+          'currentUser:',
+          currentUser,
+        );
         loadBoards();
         loadTurnInfo();
       },
       onTurnUpdate: () => {
         // Auto-refresh turn info when shots are fired
-        console.log('🔄 onTurnUpdate called, current matchId:', matchId, 'currentUser:', currentUser);
+        console.log(
+          '🔄 onTurnUpdate called, current matchId:',
+          matchId,
+          'currentUser:',
+          currentUser,
+        );
         loadTurnInfo();
       },
       onGameEvent: (event: AllGameEvents) => {

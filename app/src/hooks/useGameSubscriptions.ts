@@ -86,14 +86,18 @@ export function useGameSubscriptions({
           break;
 
         case 'ShotProposed':
-          console.log('→ ShotProposed: calling boardUpdate + turnUpdate IMMEDIATELY');
+          console.log(
+            '→ ShotProposed: calling boardUpdate + turnUpdate IMMEDIATELY',
+          );
           // Refresh immediately so pending shot state is reflected
           onBoardUpdate?.();
           onTurnUpdate?.();
           break;
 
         case 'ShotFired':
-          console.log('→ ShotFired: calling boardUpdate + turnUpdate IMMEDIATELY');
+          console.log(
+            '→ ShotFired: calling boardUpdate + turnUpdate IMMEDIATELY',
+          );
           // Call immediately for instant turn feedback
           onBoardUpdate?.();
           onTurnUpdate?.();
