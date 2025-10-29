@@ -111,16 +111,17 @@ export default function MatchPage() {
       console.log('  📥 Fetched turn from API:', turn);
       console.log('  👤 Current user:', currentUser);
       setCurrentTurn(turn);
-      // Compare current user with turn
-      if (currentUser && turn) {
-        const myTurn = currentUser === turn;
-        console.log('  ✅ Setting isMyTurn:', myTurn);
-        setIsMyTurn(myTurn);
-      }
     } catch (e) {
       console.error('Failed to load turn info:', e);
     }
-  }, [api, matchId, currentUser]);
+  }, [api, matchId]);
+
+  // Update isMyTurn whenever currentTurn or currentUser changes
+  useEffect(() => {
+    if (currentUser && currentTurn) {
+      setIsMyTurn(currentUser === currentTurn);
+    }
+  }, [currentTurn, currentUser]);
 
   // Game event subscriptions
   const { isSubscribed: isEventSubscribed, events: gameEvents } =
@@ -257,6 +258,8 @@ export default function MatchPage() {
       const id = await api.createMatch({ player2 });
       setMatchId(id);
       setView('game');
+      // Update URL with match_id so refresh works
+      navigate(`/match?match_id=${id}`, { replace: true });
       show({ title: `Match created: ${id}`, variant: 'success' });
     } catch (e) {
       console.error('createMatch', e);
@@ -265,15 +268,17 @@ export default function MatchPage() {
         variant: 'error',
       });
     }
-  }, [api, player2, show]);
+  }, [api, player2, show, navigate]);
 
   const openGame = useCallback(
     (id: string) => {
       setMatchId(id);
       setView('game');
+      // Update URL with match_id so refresh works
+      navigate(`/match?match_id=${id}`, { replace: true });
       loadBoards();
     },
-    [loadBoards],
+    [loadBoards, navigate],
   );
 
   useEffect(() => {
@@ -1077,18 +1082,8 @@ export default function MatchPage() {
                       display: 'flex',
                       gap: '1rem',
                       alignItems: 'center',
-                      marginBottom: '1rem',
                     }}
                   >
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        loadBoards();
-                        loadTurnInfo();
-                      }}
-                    >
-                      Refresh
-                    </Button>
                     <Text size="sm" color="muted">
                       Status: {placed ? 'Ships placed' : 'Place ships to start'}
                     </Text>

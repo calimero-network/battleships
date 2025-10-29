@@ -187,6 +187,22 @@ export class AbiClient {
   }
 
   /**
+   * acknowledge_shot
+   */
+  public async acknowledgeShot(params: { match_id: string }): Promise<string> {
+    const response = await this.app.execute(
+      this.context,
+      'acknowledge_shot',
+      params,
+    );
+    if (response.success) {
+      return response.result as string;
+    } else {
+      throw new Error(response.error || 'Execution failed');
+    }
+  }
+
+  /**
    * get_own_board
    */
   public async getOwnBoard(params: {
@@ -247,14 +263,14 @@ export class AbiClient {
   /**
    * get_current_turn
    */
-  public async getCurrentTurn(): Promise<string> {
+  public async getCurrentTurn(): Promise<string | null> {
     const response = await this.app.execute(
       this.context,
       'get_current_turn',
       {},
     );
     if (response.success) {
-      return response.result as string;
+      return response.result as string | null;
     } else {
       throw new Error(response.error || 'Execution failed');
     }
@@ -271,6 +287,26 @@ export class AbiClient {
     );
     if (response.success) {
       return response.result as string;
+    } else {
+      throw new Error(response.error || 'Execution failed');
+    }
+  }
+
+  /**
+   * acknowledge_shot_handler
+   */
+  public async acknowledgeShotHandler(params: {
+    id: string;
+    x: number;
+    y: number;
+  }): Promise<void> {
+    const response = await this.app.execute(
+      this.context,
+      'acknowledge_shot_handler',
+      params,
+    );
+    if (response.success) {
+      return response.result as void;
     } else {
       throw new Error(response.error || 'Execution failed');
     }

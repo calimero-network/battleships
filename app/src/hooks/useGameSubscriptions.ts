@@ -61,7 +61,7 @@ export function useGameSubscriptions({
   const debouncedTurnUpdate = useCallback(
     debounce(() => {
       onTurnUpdate?.();
-    }, 300),
+    }, 100),
     [onTurnUpdate],
   );
 
