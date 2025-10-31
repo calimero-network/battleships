@@ -1,6 +1,201 @@
 {
   "schema_version": "wasm-abi/1",
   "types": {
+    "BattleshipState": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id_nonce",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "created_ms",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "active_match",
+          "type": {
+            "$ref": "Match"
+          },
+          "nullable": true
+        }
+      ]
+    },
+    "Board": {
+      "kind": "alias",
+      "target": {
+        "kind": "bytes"
+      }
+    },
+    "Cell": {
+      "kind": "variant",
+      "variants": [
+        {
+          "name": "Empty"
+        },
+        {
+          "name": "Ship"
+        },
+        {
+          "name": "Hit"
+        },
+        {
+          "name": "Miss"
+        },
+        {
+          "name": "Pending"
+        }
+      ]
+    },
+    "Coordinate": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "x",
+          "type": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "y",
+          "type": {
+            "kind": "u32"
+          }
+        }
+      ]
+    },
+    "Fleet": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "ships",
+          "type": {
+            "kind": "list",
+            "items": {
+              "$ref": "Ship"
+            }
+          }
+        }
+      ]
+    },
+    "GameError": {
+      "kind": "variant",
+      "variants": [
+        {
+          "name": "NotFound",
+          "payload": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "Invalid",
+          "payload": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "Forbidden",
+          "payload": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "Finished"
+        }
+      ]
+    },
+    "Match": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player1",
+          "type": {
+            "$ref": "PublicKey"
+          }
+        },
+        {
+          "name": "player2",
+          "type": {
+            "$ref": "PublicKey"
+          }
+        },
+        {
+          "name": "turn",
+          "type": {
+            "$ref": "PublicKey"
+          }
+        },
+        {
+          "name": "winner",
+          "type": {
+            "$ref": "PublicKey"
+          },
+          "nullable": true
+        },
+        {
+          "name": "placed_p1",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        {
+          "name": "placed_p2",
+          "type": {
+            "kind": "bool"
+          }
+        },
+        {
+          "name": "pending_x",
+          "type": {
+            "kind": "u32"
+          },
+          "nullable": true
+        },
+        {
+          "name": "pending_y",
+          "type": {
+            "kind": "u32"
+          },
+          "nullable": true
+        },
+        {
+          "name": "pending_shooter",
+          "type": {
+            "$ref": "PublicKey"
+          },
+          "nullable": true
+        },
+        {
+          "name": "pending_target",
+          "type": {
+            "$ref": "PublicKey"
+          },
+          "nullable": true
+        },
+        {
+          "name": "shots_p1",
+          "type": {
+            "$ref": "Board"
+          }
+        },
+        {
+          "name": "shots_p2",
+          "type": {
+            "$ref": "Board"
+          }
+        }
+      ]
+    },
     "OwnBoardView": {
       "kind": "record",
       "fields": [
@@ -14,6 +209,56 @@
           "name": "board",
           "type": {
             "kind": "bytes"
+          }
+        }
+      ]
+    },
+    "PlayerBoard": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "own",
+          "type": {
+            "$ref": "Board"
+          }
+        },
+        {
+          "name": "ships",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "placed",
+          "type": {
+            "kind": "bool"
+          }
+        }
+      ]
+    },
+    "PublicKey": {
+      "kind": "alias",
+      "target": {
+        "kind": "bytes",
+        "size": 32
+      }
+    },
+    "Ship": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "coordinates",
+          "type": {
+            "kind": "list",
+            "items": {
+              "$ref": "Coordinate"
+            }
+          }
+        },
+        {
+          "name": "length",
+          "type": {
+            "kind": "u32"
           }
         }
       ]
@@ -32,6 +277,65 @@
           "type": {
             "kind": "bytes"
           }
+        }
+      ]
+    },
+    "ValidationInput": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "board",
+          "type": {
+            "$ref": "Board"
+          },
+          "nullable": true
+        },
+        {
+          "name": "coordinates",
+          "type": {
+            "kind": "list",
+            "items": {
+              "$ref": "Coordinate"
+            }
+          },
+          "nullable": true
+        },
+        {
+          "name": "size",
+          "type": {
+            "kind": "u32"
+          },
+          "nullable": true
+        },
+        {
+          "name": "ship_length",
+          "type": {
+            "kind": "u32"
+          },
+          "nullable": true
+        },
+        {
+          "name": "fleet_composition",
+          "type": {
+            "kind": "list",
+            "items": {
+              "kind": "u32"
+            }
+          },
+          "nullable": true
+        },
+        {
+          "name": "ships",
+          "type": {
+            "kind": "list",
+            "items": {
+              "kind": "list",
+              "items": {
+                "$ref": "Coordinate"
+              }
+            }
+          },
+          "nullable": true
         }
       ]
     }
@@ -190,13 +494,13 @@
           }
         },
         {
-          "name": "x",
+          "name": "_x",
           "type": {
             "kind": "u32"
           }
         },
         {
-          "name": "y",
+          "name": "_y",
           "type": {
             "kind": "u32"
           }
@@ -207,5 +511,25 @@
       }
     }
   ],
-  "events": []
+  "events": [
+    {
+      "name": "MatchCreated"
+    },
+    {
+      "name": "ShipsPlaced"
+    },
+    {
+      "name": "ShotProposed"
+    },
+    {
+      "name": "ShotFired"
+    },
+    {
+      "name": "Winner"
+    },
+    {
+      "name": "MatchEnded"
+    }
+  ],
+  "state_root": "BattleshipState"
 }

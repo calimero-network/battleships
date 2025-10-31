@@ -495,7 +495,7 @@ impl BattleshipState {
 
     // Handlers must have the same parameters as the events they are emitting for now
     // (same name, same number of parameters, same types)
-    pub fn acknowledge_shot_handler(&mut self, id: &str, x: u8, y: u8) -> app::Result<()> {
+    pub fn acknowledge_shot_handler(&mut self, id: &str, _x: u8, _y: u8) -> app::Result<()> {
         self.acknowledge_shot(id)?;
         Ok(())
     }

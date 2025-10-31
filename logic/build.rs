@@ -1,17 +1,48 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use calimero_wasm_abi::emitter::emit_manifest;
+use calimero_wasm_abi::emitter::emit_manifest_from_crate;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/lib.rs");
 
-    // Parse the source code
-    let src_path = Path::new("src/lib.rs");
-    let src_content = fs::read_to_string(src_path).expect("Failed to read src/lib.rs");
+    // Scan all Rust source files in src/
+    let src_dir = Path::new("src");
+    let mut source_files = Vec::new();
+    
+    if let Ok(entries) = fs::read_dir(src_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+                source_files.push(path.clone());
+                println!("cargo:rerun-if-changed={}", path.display());
+            }
+        }
+    }
 
-    // Generate ABI manifest using the emitter
-    let manifest = emit_manifest(&src_content).expect("Failed to emit ABI manifest");
+    // Parse lib.rs (required)
+    let lib_path = Path::new("src/lib.rs");
+    let lib_content = fs::read_to_string(lib_path).expect("Failed to read src/lib.rs");
+    
+    // Parse all module files
+    let mut module_contents = vec![("lib.rs".to_string(), lib_content)];
+    
+    for source_file in source_files {
+        if source_file.file_name() != Some(std::ffi::OsStr::new("lib.rs")) {
+            if let Ok(content) = fs::read_to_string(&source_file) {
+                let file_name = source_file
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                module_contents.push((file_name, content));
+            }
+        }
+    }
+
+    // Generate ABI manifest from all source files
+    let manifest = emit_manifest_from_crate(&module_contents)
+        .expect("Failed to emit ABI manifest");
 
     // Serialize the manifest to JSON
     let json = serde_json::to_string_pretty(&manifest).expect("Failed to serialize manifest");
