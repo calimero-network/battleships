@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@calimero-network/calimero-client':
-        specifier: ^1.19.2
-        version: 1.20.2(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+        specifier: ^1.23.1
+        version: 1.23.1(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
       '@calimero-network/mero-icons':
         specifier: ^0.0.4
         version: 0.0.4(react@19.2.0)
@@ -775,8 +775,11 @@ packages:
     resolution: {integrity: sha512-bkFqkLhh3pMBUQQkpVgWDWq/lqzc2678eUyDlTBhRqhCHFguYYGM0Efga7tYk4TogG/3x0EEl66/OQ+WGbWB/Q==}
     engines: {node: '>=6.9.0'}
 
-  '@calimero-network/calimero-client@1.20.2':
-    resolution: {integrity: sha512-bOs/xKJy6sIlCCfV8A2aMSt9yzqFrpd5VnMXNim+xgqrk1Ixx82J3k9gvPLzc/g5OsO2uix2bCPORkhOlFKbMQ==}
+  '@calimero-network/calimero-client@1.23.1':
+    resolution:
+      {
+        integrity: sha512-lUkqZMLORd+iq7LBVmpvjjVgTPH1+m0WZQsC3z7asau8NPs6l7RSz2DafYPN4odcNwNdY7wa2bEQ3T+VwSOZqQ==,
+      }
     peerDependencies:
       '@near-wallet-selector/modal-ui': ^8.9.7
       react: ^18.3.0
@@ -4667,7 +4670,7 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
-  '@calimero-network/calimero-client@1.20.2(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))':
+  '@calimero-network/calimero-client@1.23.1(@near-wallet-selector/modal-ui@8.10.2(near-api-js@3.0.4))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(styled-components@6.1.19(react-dom@19.2.0(react@19.2.0))(react@19.2.0))':
     dependencies:
       '@near-wallet-selector/modal-ui': 8.10.2(near-api-js@3.0.4)
       axios: 1.12.2

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCalimero } from '@calimero-network/calimero-client';
 import { AllGameEvents } from '../types/events';
 
@@ -39,35 +39,21 @@ export function useGameSubscriptions({
   const isProcessingEvent = useRef(false);
   const hasSubscribedRef = useRef(false);
 
-  // Debounce function to prevent rapid-fire events
-  const debounce = <T extends (...args: any[]) => any>(
-    func: T,
-    wait: number,
-  ): ((...args: Parameters<T>) => void) => {
+  // Create debounced functions using useMemo to avoid recreating them on every render
+  const debouncedBoardUpdate = useMemo(() => {
     let timeout: ReturnType<typeof setTimeout>;
-    return (...args: Parameters<T>) => {
+    return () => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), wait);
+      timeout = setTimeout(() => {
+        onBoardUpdate?.();
+      }, 300);
     };
-  };
-
-  const debouncedBoardUpdate = useCallback(
-    debounce(() => {
-      onBoardUpdate?.();
-    }, 300),
-    [onBoardUpdate],
-  );
-
-  const debouncedTurnUpdate = useCallback(
-    debounce(() => {
-      onTurnUpdate?.();
-    }, 100),
-    [onTurnUpdate],
-  );
+  }, [onBoardUpdate]);
 
   const handleGameEvent = useCallback(
     (event: AllGameEvents) => {
       console.log('🎮 Game event received:', event);
+      console.log('🔄 Triggering UI refresh for event type:', event.type);
 
       // Add to events list
       setEvents((prev) => [...prev, event]);
@@ -75,45 +61,60 @@ export function useGameSubscriptions({
 
       switch (event.type) {
         case 'MatchCreated':
+          console.log('→ MatchCreated: calling boardUpdate');
+          debouncedBoardUpdate();
           break;
 
         case 'ShipsPlaced':
+          console.log('→ ShipsPlaced: calling boardUpdate');
           debouncedBoardUpdate();
           break;
 
         case 'ShotProposed':
+          console.log(
+            '→ ShotProposed: calling boardUpdate + turnUpdate IMMEDIATELY',
+          );
           // Refresh immediately so pending shot state is reflected
-          debouncedBoardUpdate();
-          debouncedTurnUpdate();
+          onBoardUpdate?.();
+          onTurnUpdate?.();
           break;
 
         case 'ShotFired':
-          debouncedBoardUpdate();
-          debouncedTurnUpdate();
+          console.log(
+            '→ ShotFired: calling boardUpdate + turnUpdate IMMEDIATELY',
+          );
+          // Call immediately for instant turn feedback
+          onBoardUpdate?.();
+          onTurnUpdate?.();
           break;
 
         case 'Winner':
+          console.log('→ Winner: calling boardUpdate');
           debouncedBoardUpdate();
           break;
 
         case 'MatchEnded':
+          console.log('→ MatchEnded: calling boardUpdate');
           debouncedBoardUpdate();
           break;
       }
 
       // Fallback: trigger a refresh on any game event to keep UI in sync
+      console.log('→ Fallback: calling boardUpdate');
       debouncedBoardUpdate();
 
       // Call custom event handler
       onGameEvent?.(event);
     },
-    [debouncedBoardUpdate, debouncedTurnUpdate, onGameEvent],
+    [debouncedBoardUpdate, onBoardUpdate, onTurnUpdate, onGameEvent],
   );
 
   const parseGameEvent = useCallback((eventData: any): AllGameEvents | null => {
+    console.log('🔍 Parsing event data:', JSON.stringify(eventData, null, 2));
     try {
       // Handle different event structures from Calimero
       if (eventData.event_type) {
+        console.log('  → Found direct event_type:', eventData.event_type);
         // Direct event structure
         switch (eventData.event_type) {
           case 'MatchCreated':
@@ -141,10 +142,16 @@ export function useGameSubscriptions({
             return { type: 'MatchEnded', id: eventData.id };
         }
       } else if (eventData.events && Array.isArray(eventData.events)) {
+        console.log(
+          '  → Found events array with',
+          eventData.events.length,
+          'events',
+        );
         // Handle execution/state mutation events array
         for (const executionEvent of eventData.events) {
           const kind = executionEvent.kind;
           const raw = executionEvent.data;
+          console.log('    → Processing event kind:', kind, 'data:', raw);
           if (!kind || raw === undefined || raw === null) continue;
 
           // Data can be a byte array representing JSON. Decode if necessary.
@@ -156,12 +163,14 @@ export function useGameSubscriptions({
             ) {
               const decoder = new TextDecoder();
               const jsonStr = decoder.decode(new Uint8Array(raw));
+              console.log('    → Decoded JSON string:', jsonStr);
               payload = JSON.parse(jsonStr);
             }
           } catch (e) {
             console.warn('Failed to decode execution event payload', e);
           }
 
+          console.log('    → Final payload:', payload);
           switch (kind) {
             case 'MatchCreated':
               return { type: 'MatchCreated', id: payload.id } as AllGameEvents;
@@ -189,6 +198,7 @@ export function useGameSubscriptions({
           }
         }
       }
+      console.log('  ⚠️ No matching event structure found');
     } catch (error) {
       console.error('Error parsing game event:', error);
     }
@@ -198,7 +208,7 @@ export function useGameSubscriptions({
   const eventCallback = useCallback(
     async (event: any) => {
       // Log all incoming events for debugging
-      console.log('📡 Calimero WebSocket Event:', {
+      console.log('📡 Calimero SSE Event:', {
         type: event.type,
         timestamp: new Date().toISOString(),
         data: event.data ? Object.keys(event.data) : 'no data',
@@ -220,7 +230,15 @@ export function useGameSubscriptions({
             console.log('🔄 Handling StateMutation event');
             if (event.data) {
               const gameEvent = parseGameEvent(event.data);
-              if (gameEvent) handleGameEvent(gameEvent);
+              if (gameEvent) {
+                console.log(
+                  '  ✅ Successfully parsed StateMutation to:',
+                  gameEvent,
+                );
+                handleGameEvent(gameEvent);
+              } else {
+                console.log('  ❌ Failed to parse StateMutation event');
+              }
             }
             break;
 
@@ -228,12 +246,25 @@ export function useGameSubscriptions({
             console.log('⚡ Handling ExecutionEvent');
             if (event.data) {
               const gameEvent = parseGameEvent(event.data);
-              if (gameEvent) handleGameEvent(gameEvent);
+              if (gameEvent) {
+                console.log(
+                  '  ✅ Successfully parsed ExecutionEvent to:',
+                  gameEvent,
+                );
+                handleGameEvent(gameEvent);
+              } else {
+                console.log('  ❌ Failed to parse ExecutionEvent');
+              }
             }
             break;
 
           default:
-            console.log('Unknown event type:', event.type);
+            console.log(
+              'Unknown event type:',
+              event.type,
+              '- Full event:',
+              event,
+            );
         }
       } catch (callbackError) {
         console.error('Error in subscription callback:', callbackError);
@@ -254,11 +285,17 @@ export function useGameSubscriptions({
     try {
       // Unsubscribe from previous context if exists
       if (currentSubscriptionRef.current) {
+        console.log(
+          '🔄 Unsubscribing from previous context:',
+          currentSubscriptionRef.current,
+        );
         app.unsubscribeFromEvents([currentSubscriptionRef.current]);
       }
 
-      // Subscribe to new context
+      // Subscribe to new context with the updated SSE client
+      console.log('📤 Subscribing to context:', contextId);
       app.subscribeToEvents([contextId], eventCallback);
+
       currentSubscriptionRef.current = contextId;
       hasSubscribedRef.current = true;
       setIsSubscribed(true);

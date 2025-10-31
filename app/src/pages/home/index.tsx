@@ -126,7 +126,7 @@ export default function HomePage() {
     } finally {
       loadingRef.current = false;
     }
-  }, [api, me, matchId, show]);
+  }, [api, matchId, show]);
 
   const createMatch = useCallback(async () => {
     if (!api) return;

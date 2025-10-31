@@ -12,7 +12,6 @@ import {
   NavbarBrand,
   NavbarMenu,
   NavbarItem,
-  List,
 } from '@calimero-network/mero-ui';
 import {
   useCalimero,

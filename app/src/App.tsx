@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Routes, Route, BrowserRouter } from 'react-router-dom';
-import { CalimeroProvider, AppMode } from '@calimero-network/calimero-client';
+import {
+  CalimeroProvider,
+  AppMode,
+  EventStreamMode,
+} from '@calimero-network/calimero-client';
 import { ToastProvider } from '@calimero-network/mero-ui';
 
 import MatchPage from './pages/match';
@@ -8,7 +12,7 @@ import Authenticate from './pages/login/Authenticate';
 
 export default function App() {
   const [clientAppId] = useState<string>(
-    '36BREwJPfxv2GPc1sSNmdAbTqTNzuhiWszfcwBS57krn',
+    'Dn4x5upXDUZseBTLX47T5oP7Agrm2hLzhLH1qCf9Nibo',
   );
 
   return (
@@ -16,6 +20,7 @@ export default function App() {
       clientApplicationId={clientAppId}
       applicationPath={window.location.pathname || '/'}
       mode={AppMode.MultiContext}
+      eventStreamMode={EventStreamMode.SSE}
     >
       <ToastProvider>
         <BrowserRouter basename="/">
