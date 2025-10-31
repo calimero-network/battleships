@@ -114,7 +114,7 @@ export default function MatchPage() {
     } catch (e) {
       console.error('Failed to load turn info:', e);
     }
-  }, [api, matchId]);
+  }, [api, matchId, currentUser]);
 
   // Update isMyTurn whenever currentTurn or currentUser changes
   useEffect(() => {
@@ -123,52 +123,59 @@ export default function MatchPage() {
     }
   }, [currentTurn, currentUser]);
 
-  // Game event subscriptions
-  const { isSubscribed: isEventSubscribed, events: gameEvents } =
-    useGameSubscriptions({
-      contextId: currentContext?.contextId || '',
+  // Wrap callbacks in useCallback to avoid stale closures
+  const handleBoardUpdate = useCallback(() => {
+    console.log(
+      '📋 onBoardUpdate called, current matchId:',
       matchId,
-      onBoardUpdate: () => {
-        // Auto-refresh board when events occur
-        console.log(
-          '📋 onBoardUpdate called, current matchId:',
-          matchId,
-          'currentUser:',
-          currentUser,
-        );
-        loadBoards();
-        loadTurnInfo();
-      },
-      onTurnUpdate: () => {
-        // Auto-refresh turn info when shots are fired
-        console.log(
-          '🔄 onTurnUpdate called, current matchId:',
-          matchId,
-          'currentUser:',
-          currentUser,
-        );
-        loadTurnInfo();
-      },
-      onGameEvent: (event: AllGameEvents) => {
-        if (event.type === 'ShotProposed') {
-          // If it's not our turn, we are the target → overlay pending on our board
-          if (
-            !isMyTurn &&
-            typeof event.x === 'number' &&
-            typeof event.y === 'number'
-          ) {
-            setPendingShot({ x: event.x, y: event.y });
-          }
-        }
+      'currentUser:',
+      currentUser,
+    );
+    loadBoards();
+    loadTurnInfo();
+  }, [matchId, currentUser, loadBoards, loadTurnInfo]);
+
+  const handleTurnUpdate = useCallback(() => {
+    console.log(
+      '🔄 onTurnUpdate called, current matchId:',
+      matchId,
+      'currentUser:',
+      currentUser,
+    );
+    loadTurnInfo();
+  }, [matchId, currentUser, loadTurnInfo]);
+
+  const handleGameEvent = useCallback(
+    (event: AllGameEvents) => {
+      if (event.type === 'ShotProposed') {
+        // If it's not our turn, we are the target → overlay pending on our board
         if (
-          event.type === 'ShotFired' ||
-          event.type === 'MatchEnded' ||
-          event.type === 'Winner'
+          !isMyTurn &&
+          typeof event.x === 'number' &&
+          typeof event.y === 'number'
         ) {
-          setPendingShot(null);
+          setPendingShot({ x: event.x, y: event.y });
         }
-      },
-    });
+      }
+      if (
+        event.type === 'ShotFired' ||
+        event.type === 'MatchEnded' ||
+        event.type === 'Winner'
+      ) {
+        setPendingShot(null);
+      }
+    },
+    [isMyTurn],
+  );
+
+  // Game event subscriptions
+  const { isSubscribed: isEventSubscribed } = useGameSubscriptions({
+    contextId: currentContext?.contextId || '',
+    matchId,
+    onBoardUpdate: handleBoardUpdate,
+    onTurnUpdate: handleTurnUpdate,
+    onGameEvent: handleGameEvent,
+  });
 
   useEffect(() => {
     if (!app) return;
@@ -202,6 +209,30 @@ export default function MatchPage() {
           // Debug: log app object to see what's available
           console.log('App object:', app);
           console.log('App keys:', Object.keys(app || {}));
+
+          // Try to get user from the context member
+          if (contexts.length > 0 && contexts[0].identityKey) {
+            console.log(
+              '✅ Got current user from context:',
+              contexts[0].identityKey,
+            );
+            setCurrentUser(contexts[0].identityKey);
+          } else {
+            console.warn(
+              '⚠️ No identityKey in context, trying contract method...',
+            );
+            // Fallback: try getting from contract
+            try {
+              const user = await client.getCurrentUser();
+              console.log(
+                '✅ Successfully fetched current user from contract:',
+                user,
+              );
+              setCurrentUser(user);
+            } catch (e) {
+              console.error('❌ Failed to get current user from contract:', e);
+            }
+          }
 
           // Debug SSE connection
           if (app.eventStream) {
@@ -239,11 +270,8 @@ export default function MatchPage() {
           } else {
             console.warn('⚠️ No eventStream in app!');
           }
-
-          const user = await client.getCurrentUser();
-          setCurrentUser(user);
         } catch (e) {
-          console.error('Failed to get current user:', e);
+          console.error('❌ Error in user/SSE setup:', e);
         }
       } catch (e) {
         console.error(e);

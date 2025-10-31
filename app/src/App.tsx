@@ -12,7 +12,7 @@ import Authenticate from './pages/login/Authenticate';
 
 export default function App() {
   const [clientAppId] = useState<string>(
-    '36BREwJPfxv2GPc1sSNmdAbTqTNzuhiWszfcwBS57krn',
+    'Dn4x5upXDUZseBTLX47T5oP7Agrm2hLzhLH1qCf9Nibo',
   );
 
   return (

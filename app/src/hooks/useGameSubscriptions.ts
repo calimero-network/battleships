@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCalimero } from '@calimero-network/calimero-client';
 import { AllGameEvents } from '../types/events';
 
@@ -39,31 +39,16 @@ export function useGameSubscriptions({
   const isProcessingEvent = useRef(false);
   const hasSubscribedRef = useRef(false);
 
-  // Debounce function to prevent rapid-fire events
-  const debounce = <T extends (...args: any[]) => any>(
-    func: T,
-    wait: number,
-  ): ((...args: Parameters<T>) => void) => {
+  // Create debounced functions using useMemo to avoid recreating them on every render
+  const debouncedBoardUpdate = useMemo(() => {
     let timeout: ReturnType<typeof setTimeout>;
-    return (...args: Parameters<T>) => {
+    return () => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), wait);
+      timeout = setTimeout(() => {
+        onBoardUpdate?.();
+      }, 300);
     };
-  };
-
-  const debouncedBoardUpdate = useCallback(
-    debounce(() => {
-      onBoardUpdate?.();
-    }, 300),
-    [onBoardUpdate],
-  );
-
-  const debouncedTurnUpdate = useCallback(
-    debounce(() => {
-      onTurnUpdate?.();
-    }, 100),
-    [onTurnUpdate],
-  );
+  }, [onBoardUpdate]);
 
   const handleGameEvent = useCallback(
     (event: AllGameEvents) => {
@@ -121,7 +106,7 @@ export function useGameSubscriptions({
       // Call custom event handler
       onGameEvent?.(event);
     },
-    [debouncedBoardUpdate, debouncedTurnUpdate, onGameEvent],
+    [debouncedBoardUpdate, onBoardUpdate, onTurnUpdate, onGameEvent],
   );
 
   const parseGameEvent = useCallback((eventData: any): AllGameEvents | null => {

@@ -16,7 +16,6 @@ import {
   Menu,
   MenuGroup,
   MenuItem,
-  Text,
   useToast,
 } from '@calimero-network/mero-ui';
 import {

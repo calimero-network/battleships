@@ -57,33 +57,6 @@ export class CalimeroBytes {
 }
 
 /**
- * Convert CalimeroBytes instances to arrays for WASM compatibility
- */
-function convertCalimeroBytesForWasm(obj: any): any {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-
-  if (obj instanceof CalimeroBytes) {
-    return obj.toArray();
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map((item) => convertCalimeroBytesForWasm(item));
-  }
-
-  if (typeof obj === 'object') {
-    const result: any = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = convertCalimeroBytesForWasm(value);
-    }
-    return result;
-  }
-
-  return obj;
-}
-
-/**
  * Convert arrays back to CalimeroBytes instances from WASM responses
  */
 function convertWasmResultToCalimeroBytes(obj: any): any {
@@ -263,14 +236,14 @@ export class AbiClient {
   /**
    * get_current_turn
    */
-  public async getCurrentTurn(): Promise<string | null> {
+  public async getCurrentTurn(): Promise<string> {
     const response = await this.app.execute(
       this.context,
       'get_current_turn',
       {},
     );
     if (response.success) {
-      return response.result as string | null;
+      return response.result as string;
     } else {
       throw new Error(response.error || 'Execution failed');
     }
