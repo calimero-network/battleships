@@ -15,9 +15,6 @@ importers:
         specifier: ^0.3.4
         version: 0.3.7(@floating-ui/dom@1.7.4)(@tiptap/core@3.6.6(@tiptap/pm@3.6.6))(@tiptap/pm@3.6.6)(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
     devDependencies:
-      '@calimero-network/merobox-js':
-        specifier: ^0.0.3
-        version: 0.0.3
       chokidar-cli:
         specifier: ^3.0.0
         version: 3.0.0
@@ -45,11 +42,6 @@ packages:
     peerDependencies:
       react: '>=19.0.0'
       react-dom: '>=19.0.0'
-
-  '@calimero-network/merobox-js@0.0.3':
-    resolution: {integrity: sha512-Lmhg95TcC+6+O7hWEZpQW/bREYRWGUeyK5Dq+lUTWaD/erqu/+aCzfsh89hsuj8ENtXBsOqhyyDQCfKSVdTgCQ==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   '@floating-ui/core@1.7.3':
     resolution: {integrity: sha512-sGnvb5dmrJaKEZ+LDIpguvdX3bDlEllmv4/ClQ9awcmCZrlx5jQyyMWFM5kBI+EyNOCDDiKk8il0zeuX3Zlg/w==}
@@ -659,8 +651,6 @@ snapshots:
       - '@tiptap/pm'
       - '@types/react'
       - '@types/react-dom'
-
-  '@calimero-network/merobox-js@0.0.3': {}
 
   '@floating-ui/core@1.7.3':
     dependencies:

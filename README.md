@@ -187,9 +187,16 @@ npm test
 
 ### Calimero Deployment
 
-1. **Bootstrap local Calimero network with workflow**
+1. **Bootstrap local Calimero network with Merobox and run workflow**
    ```bash
-   pnpm run network:bootstrap
+      # Using pipx (recommended)
+      pipx install merobox
+
+      # Or on macOS with Homebrew
+      brew install calimero-network/tap/merobox
+   
+      # Run workflow
+      merobox bootstrap run workflow.yml
    ```
 
 2. **Build the WASM**

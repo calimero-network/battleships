@@ -9,11 +9,9 @@
     "app:dev": "concurrently -n web,res -c green,magenta \"pnpm --dir app dev\" \"pnpm run logic:watch\"",
     "app:build": "pnpm --dir app build",
     "app:preview": "pnpm --dir app preview",
-    "app:generate-client": "npx @calimero-network/abi-codegen@0.1.1 -i logic/res/abi.json -o app/src/api ",
-    "network:bootstrap": "npx @calimero-network/merobox-js@latest bootstrap run workflows/workflow-example.yml"
+    "app:generate-client": "npx @calimero-network/abi-codegen@0.1.1 -i logic/res/abi.json -o app/src/api "
   },
   "devDependencies": {
-    "@calimero-network/merobox-js": "^0.0.3",
     "chokidar-cli": "^3.0.0",
     "concurrently": "^9.2.1",
     "husky": "^9.0.11"
