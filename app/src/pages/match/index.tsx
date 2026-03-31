@@ -21,10 +21,8 @@ import {
   CopyToClipboard,
 } from '@calimero-network/mero-ui';
 import {
-  CalimeroConnectButton,
-  ConnectionType,
-  useCalimero,
-} from '@calimero-network/calimero-client';
+  useMero,
+} from '@calimero-network/mero-react';
 import { createKvClient, AbiClient } from '../../features/kv/api';
 import type { AllGameEvents } from '../../types/events';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
@@ -32,7 +30,7 @@ import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 export default function MatchPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, logout, app, appUrl } = useCalimero();
+  const { isAuthenticated, logout, mero, nodeUrl, connectToNode } = useMero();
   const { show } = useToast();
 
   // View state
@@ -178,18 +176,18 @@ export default function MatchPage() {
   });
 
   useEffect(() => {
-    if (!app) return;
+    if (!mero) return;
     (async () => {
       try {
-        const client = await createKvClient(app);
+        const client = await createKvClient(mero);
         setApi(client);
-        const contexts = await app.fetchContexts();
+        const contexts = await mero.admin.getContexts();
         if (contexts.length > 0) {
           const context = contexts[0];
           setCurrentContext({
             applicationId: context.applicationId,
             contextId: context.contextId,
-            nodeUrl: appUrl || 'http://node1.127.0.0.1.nip.io',
+            nodeUrl: nodeUrl || 'http://node1.127.0.0.1.nip.io',
           });
         }
         // pick match_id from URL if present
@@ -204,22 +202,22 @@ export default function MatchPage() {
           const ids = await client.getMatches();
           setMyMatches(ids);
         } catch (_) {}
-        // fetch current user and debug app object
+        // fetch current user and debug mero object
         try {
-          // Debug: log app object to see what's available
-          console.log('App object:', app);
-          console.log('App keys:', Object.keys(app || {}));
+          // Debug: log mero object to see what's available
+          console.log('Mero object:', mero);
+          console.log('Mero keys:', Object.keys(mero || {}));
 
           // Try to get user from the context member
-          if (contexts.length > 0 && contexts[0].identityKey) {
+          if (contexts.length > 0 && contexts[0].contextIdentity?.publicKey) {
             console.log(
               '✅ Got current user from context:',
-              contexts[0].identityKey,
+              contexts[0].contextIdentity.publicKey,
             );
-            setCurrentUser(contexts[0].identityKey);
+            setCurrentUser(contexts[0].contextIdentity.publicKey);
           } else {
             console.warn(
-              '⚠️ No identityKey in context, trying contract method...',
+              '⚠️ No contextIdentity in context, trying contract method...',
             );
             // Fallback: try getting from contract
             try {
@@ -235,40 +233,11 @@ export default function MatchPage() {
           }
 
           // Debug SSE connection
-          if (app.eventStream) {
-            console.log('EventStream object:', app.eventStream);
-            if (app.eventStream.eventSource) {
-              const es = app.eventStream.eventSource;
-              console.log('EventSource URL:', es.url);
-              console.log(
-                'EventSource readyState:',
-                es.readyState,
-                es.readyState === 0
-                  ? '(CONNECTING)'
-                  : es.readyState === 1
-                    ? '(OPEN)'
-                    : '(CLOSED)',
-              );
-
-              // Listen for SSE connection events
-              es.addEventListener('open', () => {
-                console.log('✅ EventSource OPENED');
-              });
-              es.addEventListener('error', (e) => {
-                console.error('❌ EventSource ERROR:', e);
-                console.log(
-                  'EventSource readyState after error:',
-                  es.readyState,
-                );
-              });
-              es.addEventListener('message', (e) => {
-                console.log('📨 RAW EventSource message:', e.data);
-              });
-            } else {
-              console.warn('⚠️ No eventSource in eventStream!');
-            }
+          if (mero.events) {
+            console.log('Events object:', mero.events);
+            console.log('Events connected:', mero.events.isConnected?.());
           } else {
-            console.warn('⚠️ No eventStream in app!');
+            console.warn('⚠️ No events in mero!');
           }
         } catch (e) {
           console.error('❌ Error in user/SSE setup:', e);
@@ -278,7 +247,7 @@ export default function MatchPage() {
         show({ title: 'Failed to initialize API client', variant: 'error' });
       }
     })();
-  }, [app, appUrl, show, location.search]);
+  }, [mero, nodeUrl, show, location.search]);
 
   const createMatch = useCallback(async () => {
     if (!api) return;
@@ -834,12 +803,9 @@ export default function MatchPage() {
               </Menu>
             ) : (
               <NavbarItem>
-                <CalimeroConnectButton
-                  connectionType={{
-                    type: ConnectionType.Custom,
-                    url: 'http://node1.127.0.0.1.nip.io',
-                  }}
-                />
+                <Button onClick={() => connectToNode('http://node1.127.0.0.1.nip.io')}>
+                  Connect
+                </Button>
               </NavbarItem>
             )}
           </NavbarMenu>
@@ -1065,12 +1031,9 @@ export default function MatchPage() {
             </Menu>
           ) : (
             <NavbarItem>
-              <CalimeroConnectButton
-                connectionType={{
-                  type: ConnectionType.Custom,
-                  url: 'http://node1.127.0.0.1.nip.io',
-                }}
-              />
+              <Button onClick={() => connectToNode('http://node1.127.0.0.1.nip.io')}>
+                Connect
+              </Button>
             </NavbarItem>
           )}
         </NavbarMenu>

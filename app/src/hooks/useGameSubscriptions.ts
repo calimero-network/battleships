@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useCalimero } from '@calimero-network/calimero-client';
+import { useMero } from '@calimero-network/mero-react';
 import { AllGameEvents } from '../types/events';
 
 export interface UseGameSubscriptionsOptions {
@@ -27,7 +27,7 @@ export function useGameSubscriptions({
   onTurnUpdate,
   onGameEvent,
 }: UseGameSubscriptionsOptions): UseGameSubscriptionsReturn {
-  const { app } = useCalimero();
+  const { mero } = useMero();
 
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -277,7 +277,7 @@ export function useGameSubscriptions({
   );
 
   const subscribe = useCallback(() => {
-    if (!app || !contextId || isConnecting || hasSubscribedRef.current) return;
+    if (!mero || !contextId || isConnecting || hasSubscribedRef.current) return;
 
     setIsConnecting(true);
     setError(null);
@@ -289,12 +289,13 @@ export function useGameSubscriptions({
           '🔄 Unsubscribing from previous context:',
           currentSubscriptionRef.current,
         );
-        app.unsubscribeFromEvents([currentSubscriptionRef.current]);
+        mero.events.unsubscribe([currentSubscriptionRef.current]);
       }
 
       // Subscribe to new context with the updated SSE client
       console.log('📤 Subscribing to context:', contextId);
-      app.subscribeToEvents([contextId], eventCallback);
+      mero.events.subscribe([contextId]);
+      mero.events.on('event', eventCallback);
 
       currentSubscriptionRef.current = contextId;
       hasSubscribedRef.current = true;
@@ -307,13 +308,14 @@ export function useGameSubscriptions({
       setError('Failed to subscribe to events');
       setIsConnecting(false);
     }
-  }, [app, contextId, isConnecting, eventCallback]);
+  }, [mero, contextId, isConnecting, eventCallback]);
 
   const unsubscribe = useCallback(() => {
-    if (!app || !currentSubscriptionRef.current) return;
+    if (!mero || !currentSubscriptionRef.current) return;
 
     try {
-      app.unsubscribeFromEvents([currentSubscriptionRef.current]);
+      mero.events.unsubscribe([currentSubscriptionRef.current]);
+      mero.events.off('event', eventCallback);
       currentSubscriptionRef.current = null;
       hasSubscribedRef.current = false;
       setIsSubscribed(false);
@@ -321,14 +323,14 @@ export function useGameSubscriptions({
     } catch (error) {
       console.error('Failed to unsubscribe from game events:', error);
     }
-  }, [app]);
+  }, [mero, eventCallback]);
 
   // Auto-subscribe when contextId changes (only once)
   useEffect(() => {
-    if (contextId && app && !hasSubscribedRef.current) {
+    if (contextId && mero && !hasSubscribedRef.current) {
       subscribe();
     }
-  }, [contextId, app, subscribe]);
+  }, [contextId, mero, subscribe]);
 
   // Cleanup on unmount
   useEffect(() => {

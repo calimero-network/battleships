@@ -19,15 +19,13 @@ import {
   useToast,
 } from '@calimero-network/mero-ui';
 import {
-  CalimeroConnectButton,
-  ConnectionType,
-  useCalimero,
-} from '@calimero-network/calimero-client';
+  useMero,
+} from '@calimero-network/mero-react';
 import { createKvClient, AbiClient } from '../../features/kv/api';
 
 export default function PlayPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, app } = useCalimero();
+  const { isAuthenticated, logout, mero, connectToNode } = useMero();
   const { show } = useToast();
   const [api, setApi] = useState<AbiClient | null>(null);
   const [matchId, setMatchId] = useState<string>('');
@@ -39,16 +37,16 @@ export default function PlayPage() {
     if (!isAuthenticated) navigate('/');
   }, [isAuthenticated, navigate]);
   useEffect(() => {
-    if (!app) return;
+    if (!mero) return;
     (async () => {
       try {
-        setApi(await createKvClient(app));
+        setApi(await createKvClient(mero));
       } catch (e) {
         console.error(e);
         show({ title: 'Failed to init API', variant: 'error' });
       }
     })();
-  }, [app, show]);
+  }, [mero, show]);
 
   const propose = useCallback(async () => {
     if (!api) return;
@@ -94,12 +92,9 @@ export default function PlayPage() {
             </Menu>
           ) : (
             <NavbarItem>
-              <CalimeroConnectButton
-                connectionType={{
-                  type: ConnectionType.Custom,
-                  url: 'http://node1.127.0.0.1.nip.io',
-                }}
-              />
+              <Button onClick={() => connectToNode('http://node1.127.0.0.1.nip.io')}>
+                Connect
+              </Button>
             </NavbarItem>
           )}
         </NavbarMenu>

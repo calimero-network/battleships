@@ -1,5 +1,5 @@
 import { AbiClient, AbiEvent } from '../../../api/AbiClient';
-import { CalimeroApp } from '@calimero-network/calimero-client';
+import { MeroJs } from '@calimero-network/mero-react';
 
 export { AbiClient };
 export type { AbiEvent };
@@ -14,12 +14,16 @@ export function isOk<T>(
   return result.error === null;
 }
 
-export async function createKvClient(app: CalimeroApp): Promise<AbiClient> {
+export async function createKvClient(app: MeroJs): Promise<AbiClient> {
   console.log('Creating KV client');
-  const contexts = await app.fetchContexts();
+  const contexts = await app.admin.getContexts();
   const context = contexts[0];
   if (!context) {
     throw new Error('No contexts available');
   }
-  return new AbiClient(app, context);
+  return new AbiClient(app, {
+    contextId: context.contextId,
+    executorId: context.contextIdentity?.publicKey || '',
+    applicationId: context.applicationId,
+  });
 }
