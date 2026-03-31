@@ -1,26 +1,20 @@
-import React, { useState } from 'react';
-import { Routes, Route, BrowserRouter } from 'react-router-dom';
-import {
-  CalimeroProvider,
-  AppMode,
-  EventStreamMode,
-} from '@calimero-network/calimero-client';
+import React from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { AppMode, MeroProvider } from '@calimero-network/mero-react';
 import { ToastProvider } from '@calimero-network/mero-ui';
 
 import MatchPage from './pages/match';
 import Authenticate from './pages/login/Authenticate';
 
 export default function App() {
-  const [clientAppId] = useState<string>(
-    'Dn4x5upXDUZseBTLX47T5oP7Agrm2hLzhLH1qCf9Nibo',
-  );
+  const packageName = import.meta.env.VITE_PACKAGE_NAME?.trim() || undefined;
+  const registryUrl = import.meta.env.VITE_REGISTRY_URL?.trim() || undefined;
 
   return (
-    <CalimeroProvider
-      clientApplicationId={clientAppId}
-      applicationPath={window.location.pathname || '/'}
+    <MeroProvider
       mode={AppMode.MultiContext}
-      eventStreamMode={EventStreamMode.SSE}
+      packageName={packageName}
+      registryUrl={registryUrl}
     >
       <ToastProvider>
         <BrowserRouter basename="/">
@@ -30,6 +24,6 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </ToastProvider>
-    </CalimeroProvider>
+    </MeroProvider>
   );
 }

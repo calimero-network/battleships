@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@calimero-network/calimero-client": "^1.23.1",
     "@calimero-network/mero-icons": "^0.0.4",
+    "@calimero-network/mero-react": "^1.0.2",
     "@calimero-network/mero-ui": "^0.3.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
