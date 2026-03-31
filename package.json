@@ -9,7 +9,7 @@
     "app:dev": "concurrently -n web,res -c green,magenta \"pnpm --dir app dev\" \"pnpm run logic:watch\"",
     "app:build": "pnpm --dir app build",
     "app:preview": "pnpm --dir app preview",
-    "app:generate-client": "npx @calimero-network/abi-codegen@0.1.1 -i logic/res/abi.json -o app/src/api "
+    "app:generate-client": "pnpm --dir app codegen"
   },
   "devDependencies": {
     "chokidar-cli": "^3.0.0",

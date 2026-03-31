@@ -6,6 +6,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CopyToClipboard,
   Grid,
   GridItem,
   Input,
@@ -16,39 +17,66 @@ import {
   Menu,
   MenuGroup,
   MenuItem,
+  Text,
   useToast,
 } from '@calimero-network/mero-ui';
-import {
-  CalimeroConnectButton,
-  ConnectionType,
-  useCalimero,
-} from '@calimero-network/calimero-client';
+import { useMero } from '@calimero-network/mero-react';
 import { createKvClient, AbiClient } from '../../features/kv/api';
+import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 
 export default function PlayPage() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, app } = useCalimero();
+  const {
+    isAuthenticated,
+    logout,
+    mero,
+    nodeUrl,
+    contextId,
+    contextIdentity,
+    connectToNode,
+  } = useMero();
+  const defaultNodeUrl =
+    import.meta.env.VITE_NODE_URL?.trim() || 'http://node1.127.0.0.1.nip.io';
   const { show } = useToast();
   const [api, setApi] = useState<AbiClient | null>(null);
+  const [currentContext, setCurrentContext] = useState<{
+    applicationId: string;
+    contextId: string;
+    nodeUrl: string;
+  } | null>(null);
   const [matchId, setMatchId] = useState<string>('');
   const [x, setX] = useState<string>('0');
   const [y, setY] = useState<string>('0');
   const loadingRef = useRef<boolean>(false);
 
+  const { isSubscribed: isEventSubscribed } = useGameSubscriptions({
+    contextId: currentContext?.contextId || '',
+    matchId,
+  });
+
   useEffect(() => {
     if (!isAuthenticated) navigate('/');
   }, [isAuthenticated, navigate]);
   useEffect(() => {
-    if (!app) return;
+    if (!mero) return;
     (async () => {
       try {
-        setApi(await createKvClient(app));
+        const { client, context } = await createKvClient(mero, {
+          contextId,
+          contextIdentity,
+        });
+        setApi(client);
+        setCurrentContext({
+          applicationId: context.applicationId,
+          contextId: context.contextId,
+          nodeUrl: nodeUrl || defaultNodeUrl,
+        });
       } catch (e) {
         console.error(e);
         show({ title: 'Failed to init API', variant: 'error' });
       }
     })();
-  }, [app, show]);
+  }, [contextId, contextIdentity, defaultNodeUrl, mero, nodeUrl, show]);
 
   const propose = useCallback(async () => {
     if (!api) return;
@@ -85,6 +113,83 @@ export default function PlayPage() {
     <>
       <MeroNavbar variant="elevated" size="md">
         <NavbarBrand text="Battleship" />
+        <NavbarMenu align="center">
+          {currentContext && (
+            <div
+              style={{
+                display: 'flex',
+                gap: '1.5rem',
+                alignItems: 'center',
+                fontSize: '0.875rem',
+                color: '#9ca3af',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+              }}
+            >
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Text size="sm" color="muted">
+                  Node:
+                </Text>
+                <Text
+                  size="sm"
+                  style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
+                >
+                  {currentContext.nodeUrl
+                    .replace('http://', '')
+                    .replace('https://', '')}
+                </Text>
+                <CopyToClipboard
+                  text={currentContext.nodeUrl}
+                  variant="icon"
+                  size="small"
+                  successMessage="Node URL copied!"
+                />
+              </div>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Text size="sm" color="muted">
+                  App ID:
+                </Text>
+                <Text
+                  size="sm"
+                  style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
+                >
+                  {currentContext.applicationId.slice(0, 8)}...
+                  {currentContext.applicationId.slice(-8)}
+                </Text>
+                <CopyToClipboard
+                  text={currentContext.applicationId}
+                  variant="icon"
+                  size="small"
+                  successMessage="Application ID copied!"
+                />
+              </div>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Text size="sm" color="muted">
+                  Context ID:
+                </Text>
+                <Text
+                  size="sm"
+                  style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
+                >
+                  {currentContext.contextId.slice(0, 8)}...
+                  {currentContext.contextId.slice(-8)}
+                </Text>
+                <CopyToClipboard
+                  text={currentContext.contextId}
+                  variant="icon"
+                  size="small"
+                  successMessage="Context ID copied!"
+                />
+              </div>
+            </div>
+          )}
+        </NavbarMenu>
         <NavbarMenu align="right">
           {isAuthenticated ? (
             <Menu variant="compact" size="md">
@@ -94,12 +199,9 @@ export default function PlayPage() {
             </Menu>
           ) : (
             <NavbarItem>
-              <CalimeroConnectButton
-                connectionType={{
-                  type: ConnectionType.Custom,
-                  url: 'http://node1.127.0.0.1.nip.io',
-                }}
-              />
+              <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
+                Connect
+              </Button>
             </NavbarItem>
           )}
         </NavbarMenu>
@@ -134,6 +236,26 @@ export default function PlayPage() {
                   <CardTitle>Play</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      marginBottom: '1rem',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: isEventSubscribed ? '#10b981' : '#f59e0b',
+                      }}
+                    />
+                    <Text size="sm" color="muted">
+                      {isEventSubscribed ? 'Live Updates' : 'Offline'}
+                    </Text>
+                  </div>
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();

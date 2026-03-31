@@ -21,10 +21,8 @@ import {
 } from '@calimero-network/mero-ui';
 import { useNavigate } from 'react-router-dom';
 import {
-  useCalimero,
-  CalimeroConnectButton,
-  ConnectionType,
-} from '@calimero-network/calimero-client';
+  useMero,
+} from '@calimero-network/mero-react';
 import { createKvClient, AbiClient } from '../../features/kv/api';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 
@@ -32,7 +30,17 @@ type BoardView = { size: number; own: number[]; shots: number[] };
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { isAuthenticated, logout, app, appUrl } = useCalimero();
+  const {
+    isAuthenticated,
+    logout,
+    mero,
+    nodeUrl,
+    contextId,
+    contextIdentity,
+    connectToNode,
+  } = useMero();
+  const defaultNodeUrl =
+    import.meta.env.VITE_NODE_URL?.trim() || 'http://node1.127.0.0.1.nip.io';
   const { show } = useToast();
 
   // Match form / selection
@@ -74,20 +82,19 @@ export default function HomePage() {
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (!app) return;
+    if (!mero) return;
     const initializeApi = async () => {
       try {
-        const client = await createKvClient(app);
+        const { client, context } = await createKvClient(mero, {
+          contextId,
+          contextIdentity,
+        });
         setApi(client);
-        const contexts = await app.fetchContexts();
-        if (contexts.length > 0) {
-          const context = contexts[0];
-          setCurrentContext({
-            applicationId: context.applicationId,
-            contextId: context.contextId,
-            nodeUrl: appUrl || 'http://node1.127.0.0.1.nip.io',
-          });
-        }
+        setCurrentContext({
+          applicationId: context.applicationId,
+          contextId: context.contextId,
+          nodeUrl: nodeUrl || defaultNodeUrl,
+        });
         // fetch active match id if any
         try {
           const activeId = await client.getActiveMatchId();
@@ -99,11 +106,11 @@ export default function HomePage() {
         }
       } catch (error) {
         console.error('Failed to create API client:', error);
-        window.alert('Failed to initialize API client');
+        show({ title: 'Failed to initialize API client', variant: 'error' });
       }
     };
     initializeApi();
-  }, [app, appUrl]);
+  }, [contextId, contextIdentity, defaultNodeUrl, mero, nodeUrl, show]);
 
   const refreshBoard = useCallback(async () => {
     if (loadingRef.current || !api) return;
@@ -333,12 +340,9 @@ export default function HomePage() {
             </Menu>
           ) : (
             <NavbarItem>
-              <CalimeroConnectButton
-                connectionType={{
-                  type: ConnectionType.Custom,
-                  url: 'http://node1.127.0.0.1.nip.io',
-                }}
-              />
+              <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
+                Connect
+              </Button>
             </NavbarItem>
           )}
         </NavbarMenu>

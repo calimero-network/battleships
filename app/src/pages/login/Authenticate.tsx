@@ -14,15 +14,15 @@ import {
   NavbarItem,
 } from '@calimero-network/mero-ui';
 import {
-  useCalimero,
-  CalimeroConnectButton,
-  ConnectionType,
-} from '@calimero-network/calimero-client';
+  useMero,
+} from '@calimero-network/mero-react';
 import translations from '../../constants/en.global.json';
 
 export default function Authenticate() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useCalimero();
+  const { connectToNode, isAuthenticated } = useMero();
+  const defaultNodeUrl =
+    import.meta.env.VITE_NODE_URL?.trim() || 'http://node1.127.0.0.1.nip.io';
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -33,10 +33,12 @@ export default function Authenticate() {
   return (
     <>
       <MeroNavbar variant="elevated" size="md">
-        <NavbarBrand text="KV Store" />
+        <NavbarBrand text="Battleship" />
         <NavbarMenu align="right">
           <NavbarItem>
-            <CalimeroConnectButton connectionType={ConnectionType.Remote} />
+            <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
+              Connect
+            </Button>
           </NavbarItem>
         </NavbarMenu>
       </MeroNavbar>

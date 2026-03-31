@@ -21,10 +21,8 @@ import {
   CopyToClipboard,
 } from '@calimero-network/mero-ui';
 import {
-  CalimeroConnectButton,
-  ConnectionType,
-  useCalimero,
-} from '@calimero-network/calimero-client';
+  useMero,
+} from '@calimero-network/mero-react';
 import { createKvClient, AbiClient } from '../../features/kv/api';
 import type { AllGameEvents } from '../../types/events';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
@@ -32,7 +30,17 @@ import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 export default function MatchPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, logout, app, appUrl } = useCalimero();
+  const {
+    isAuthenticated,
+    logout,
+    mero,
+    nodeUrl,
+    contextId,
+    contextIdentity,
+    connectToNode,
+  } = useMero();
+  const defaultNodeUrl =
+    import.meta.env.VITE_NODE_URL?.trim() || 'http://node1.127.0.0.1.nip.io';
   const { show } = useToast();
 
   // View state
@@ -178,20 +186,19 @@ export default function MatchPage() {
   });
 
   useEffect(() => {
-    if (!app) return;
+    if (!mero) return;
     (async () => {
       try {
-        const client = await createKvClient(app);
+        const { client, context } = await createKvClient(mero, {
+          contextId,
+          contextIdentity,
+        });
         setApi(client);
-        const contexts = await app.fetchContexts();
-        if (contexts.length > 0) {
-          const context = contexts[0];
-          setCurrentContext({
-            applicationId: context.applicationId,
-            contextId: context.contextId,
-            nodeUrl: appUrl || 'http://node1.127.0.0.1.nip.io',
-          });
-        }
+        setCurrentContext({
+          applicationId: context.applicationId,
+          contextId: context.contextId,
+          nodeUrl: nodeUrl || defaultNodeUrl,
+        });
         // pick match_id from URL if present
         const params = new URLSearchParams(location.search);
         const mid = params.get('match_id');
@@ -204,81 +211,31 @@ export default function MatchPage() {
           const ids = await client.getMatches();
           setMyMatches(ids);
         } catch (_) {}
-        // fetch current user and debug app object
+        // fetch current user, preferring the auth callback identity
         try {
-          // Debug: log app object to see what's available
-          console.log('App object:', app);
-          console.log('App keys:', Object.keys(app || {}));
-
-          // Try to get user from the context member
-          if (contexts.length > 0 && contexts[0].identityKey) {
-            console.log(
-              '✅ Got current user from context:',
-              contexts[0].identityKey,
-            );
-            setCurrentUser(contexts[0].identityKey);
+          if (contextIdentity) {
+            setCurrentUser(contextIdentity);
           } else {
-            console.warn(
-              '⚠️ No identityKey in context, trying contract method...',
-            );
-            // Fallback: try getting from contract
-            try {
-              const user = await client.getCurrentUser();
-              console.log(
-                '✅ Successfully fetched current user from contract:',
-                user,
-              );
-              setCurrentUser(user);
-            } catch (e) {
-              console.error('❌ Failed to get current user from contract:', e);
-            }
-          }
-
-          // Debug SSE connection
-          if (app.eventStream) {
-            console.log('EventStream object:', app.eventStream);
-            if (app.eventStream.eventSource) {
-              const es = app.eventStream.eventSource;
-              console.log('EventSource URL:', es.url);
-              console.log(
-                'EventSource readyState:',
-                es.readyState,
-                es.readyState === 0
-                  ? '(CONNECTING)'
-                  : es.readyState === 1
-                    ? '(OPEN)'
-                    : '(CLOSED)',
-              );
-
-              // Listen for SSE connection events
-              es.addEventListener('open', () => {
-                console.log('✅ EventSource OPENED');
-              });
-              es.addEventListener('error', (e) => {
-                console.error('❌ EventSource ERROR:', e);
-                console.log(
-                  'EventSource readyState after error:',
-                  es.readyState,
-                );
-              });
-              es.addEventListener('message', (e) => {
-                console.log('📨 RAW EventSource message:', e.data);
-              });
-            } else {
-              console.warn('⚠️ No eventSource in eventStream!');
-            }
-          } else {
-            console.warn('⚠️ No eventStream in app!');
+            const user = await client.getCurrentUser();
+            setCurrentUser(user);
           }
         } catch (e) {
-          console.error('❌ Error in user/SSE setup:', e);
+          console.error('❌ Error in user setup:', e);
         }
       } catch (e) {
         console.error(e);
         show({ title: 'Failed to initialize API client', variant: 'error' });
       }
     })();
-  }, [app, appUrl, show, location.search]);
+  }, [
+    contextId,
+    contextIdentity,
+    defaultNodeUrl,
+    location.search,
+    mero,
+    nodeUrl,
+    show,
+  ]);
 
   const createMatch = useCallback(async () => {
     if (!api) return;
@@ -834,12 +791,9 @@ export default function MatchPage() {
               </Menu>
             ) : (
               <NavbarItem>
-                <CalimeroConnectButton
-                  connectionType={{
-                    type: ConnectionType.Custom,
-                    url: 'http://node1.127.0.0.1.nip.io',
-                  }}
-                />
+                <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
+                  Connect
+                </Button>
               </NavbarItem>
             )}
           </NavbarMenu>
@@ -1065,12 +1019,9 @@ export default function MatchPage() {
             </Menu>
           ) : (
             <NavbarItem>
-              <CalimeroConnectButton
-                connectionType={{
-                  type: ConnectionType.Custom,
-                  url: 'http://node1.127.0.0.1.nip.io',
-                }}
-              />
+              <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
+                Connect
+              </Button>
             </NavbarItem>
           )}
         </NavbarMenu>
