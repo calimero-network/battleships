@@ -17,6 +17,7 @@ const KNOWN_LOBBIES_KEY = 'battleships:lobbyContextIds';
 export interface LobbyRecord {
   contextId: string;
   applicationId: string;
+  alias?: string;
 }
 
 export interface UseBattleshipsLobbyReturn {
@@ -73,24 +74,30 @@ function persistSelectedLobbyId(contextId: string | null) {
   }
 }
 
-function loadKnownLobbyIds(): Set<string> {
+function loadKnownLobbies(): Map<string, string | undefined> {
   try {
     const raw = localStorage.getItem(KNOWN_LOBBIES_KEY);
     if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) return new Set(arr);
+      const parsed = JSON.parse(raw);
+      // Support old format (string[]) and new format (Record<string, string|null>)
+      if (Array.isArray(parsed)) {
+        return new Map(parsed.map((id: string) => [id, undefined]));
+      }
+      if (typeof parsed === 'object' && parsed !== null) {
+        return new Map(Object.entries(parsed).map(([k, v]) => [k, (v as string) || undefined]));
+      }
     }
   } catch {
     // ignore
   }
-  return new Set();
+  return new Map();
 }
 
-function addKnownLobbyId(contextId: string) {
+function addKnownLobby(contextId: string, alias?: string) {
   try {
-    const ids = loadKnownLobbyIds();
-    ids.add(contextId);
-    localStorage.setItem(KNOWN_LOBBIES_KEY, JSON.stringify([...ids]));
+    const lobbies = loadKnownLobbies();
+    lobbies.set(contextId, alias);
+    localStorage.setItem(KNOWN_LOBBIES_KEY, JSON.stringify(Object.fromEntries(lobbies)));
   } catch {
     // storage unavailable
   }
@@ -131,8 +138,10 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     refetch: refetchContexts,
   } = useContexts(applicationId);
 
-  const knownIds = loadKnownLobbyIds();
-  const lobbies: LobbyRecord[] = allContexts.filter((c) => knownIds.has(c.contextId));
+  const knownLobbies = loadKnownLobbies();
+  const lobbies: LobbyRecord[] = allContexts
+    .filter((c) => knownLobbies.has(c.contextId))
+    .map((c) => ({ ...c, alias: knownLobbies.get(c.contextId) }));
 
   const [selectedLobbyId, setSelectedLobbyId] = useState<string | null>(loadSelectedLobbyId);
   const selectedLobby = lobbies.find((l) => l.contextId === selectedLobbyId) ?? null;
@@ -258,7 +267,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
 
     if (result) {
       const newCtxId = result.contextId;
-      addKnownLobbyId(newCtxId);
+      addKnownLobby(newCtxId, name || 'lobby');
       setSelectedLobbyId(newCtxId);
       persistSelectedLobbyId(newCtxId);
       await refetchContexts();
@@ -305,7 +314,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       });
 
       if (result) {
-        addKnownLobbyId(result.contextId);
+        addKnownLobby(result.contextId);
         setSelectedLobbyId(result.contextId);
         persistSelectedLobbyId(result.contextId);
         await refetchContexts();

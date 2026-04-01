@@ -840,7 +840,7 @@ export default function MatchPage() {
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.875rem', color: '#9ca3af' }}>
             <Text size="sm" color="muted">Lobby:</Text>
             <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
-              {lobby.lobbyContextId?.slice(0, 12) + '...' || 'Unknown'}
+              {lobby.selectedLobby?.alias || lobby.lobbyContextId?.slice(0, 12) + '...' || 'Unknown'}
             </Text>
             {currentContext && (
               <>
@@ -960,7 +960,7 @@ export default function MatchPage() {
                       >
                         <div>
                           <Text size="sm" style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                            {l.contextId.slice(0, 16) + '...'}
+                            {l.alias || l.contextId.slice(0, 16) + '...'}
                           </Text>
                           <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
                             {l.contextId.slice(0, 8)}...{l.contextId.slice(-8)}
