@@ -290,19 +290,8 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     try {
       const parsed = JSON.parse(invitationJson);
 
+      // Use existing context identity or generate a new one
       let memberPk = contextIdentity;
-
-      if (!memberPk) {
-        try {
-          const { identities } = await mero.admin.getContextIdentitiesOwned(
-            parsed?.invitation?.context_id ?? '',
-          );
-          if (identities.length > 0) memberPk = identities[0];
-        } catch {
-          // ignore
-        }
-      }
-
       if (!memberPk) {
         const generated = await mero.admin.generateContextIdentity();
         memberPk = generated.publicKey;
