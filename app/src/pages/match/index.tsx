@@ -47,11 +47,11 @@ export default function MatchPage() {
 
   const lobby = useBattleshipsLobby();
 
-  // View state: 'group-select' | 'lobby' | 'game'
-  const [view, setView] = useState<'group-select' | 'lobby' | 'game'>('group-select');
+  // View state: 'lobby-select' | 'lobby' | 'game'
+  const [view, setView] = useState<'lobby-select' | 'lobby' | 'game'>('lobby-select');
 
-  // Group creation form
-  const [newGroupName, setNewGroupName] = useState('');
+  // Lobby creation form
+  const [newLobbyName, setNewLobbyName] = useState('');
   const [invitationJson, setInvitationJson] = useState<string | null>(null);
   const [joinInvitationInput, setJoinInvitationInput] = useState('');
 
@@ -108,9 +108,9 @@ export default function MatchPage() {
     if (!isAuthenticated) navigate('/');
   }, [isAuthenticated, navigate]);
 
-  // Transition from group-select to lobby when group + lobby are resolved
+  // Transition from lobby-select to lobby when group + lobby are resolved
   useEffect(() => {
-    if (view === 'group-select' && lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
+    if (view === 'lobby-select' && lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
       setView('lobby');
     }
   }, [view, lobby.selectedLobby, lobby.lobbyJoined, lobby.lobbyContextId]);
@@ -788,14 +788,14 @@ export default function MatchPage() {
   }, [logout, navigate]);
 
   const handleCreateLobby = useCallback(async () => {
-    const id = await lobby.createLobby(newGroupName || undefined);
+    const id = await lobby.createLobby(newLobbyName || undefined);
     if (id) {
       setNewGroupName('');
       show({ title: 'Lobby created', variant: 'success' });
     } else if (lobby.createLobbyError) {
       show({ title: lobby.createLobbyError.message, variant: 'error' });
     }
-  }, [lobby, newGroupName, show]);
+  }, [lobby, newLobbyName, show]);
 
   const handleCreateInvitation = useCallback(async () => {
     const result = await lobby.invitePlayer();
@@ -878,10 +878,10 @@ export default function MatchPage() {
         {isAuthenticated ? (
           <Menu variant="compact" size="md">
             <MenuGroup>
-              {lobby.selectedLobby && view !== 'group-select' && (
+              {lobby.selectedLobby && view !== 'lobby-select' && (
                 <MenuItem onClick={() => {
                   lobby.clearLobby();
-                  setView('group-select');
+                  setView('lobby-select');
                   setLobbyApi(null);
                   setMatchApi(null);
                   setMatchContextId(null);
@@ -925,8 +925,8 @@ export default function MatchPage() {
     </div>
   );
 
-  // Group selection view
-  if (view === 'group-select') {
+  // Lobby selection view
+  if (view === 'lobby-select') {
     return (
       <>
         {renderNavbar()}
@@ -994,7 +994,7 @@ export default function MatchPage() {
                   <Input
                     type="text"
                     placeholder="Lobby name (optional)"
-                    value={newGroupName}
+                    value={newLobbyName}
                     onChange={(e) => setNewGroupName(e.target.value)}
                   />
                   <Button type="submit" variant="success" disabled={lobby.createLobbyLoading}>
