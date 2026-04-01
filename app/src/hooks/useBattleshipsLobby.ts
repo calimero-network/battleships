@@ -212,16 +212,23 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
 
     (async () => {
       try {
-        if (contextIdentity) {
-          if (!cancelled) setExecutorPublicKey(contextIdentity);
-          return;
-        }
+        // Always prefer context-specific owned identity (has private key on this node)
         const { identities } = await mero.admin.getContextIdentitiesOwned(lobbyContextId);
+        console.log('[lobby-hook] owned identities for', lobbyContextId, ':', identities);
+        console.log('[lobby-hook] contextIdentity from provider:', contextIdentity);
         if (!cancelled && identities.length > 0) {
           setExecutorPublicKey(identities[0]);
+          return;
         }
-      } catch {
-        // identity resolution will be retried on join
+        // Fall back to provider-level identity
+        if (!cancelled && contextIdentity) {
+          setExecutorPublicKey(contextIdentity);
+        }
+      } catch (err) {
+        console.log('[lobby-hook] getContextIdentitiesOwned error:', err);
+        if (!cancelled && contextIdentity) {
+          setExecutorPublicKey(contextIdentity);
+        }
       }
     })();
 
@@ -295,6 +302,21 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
 
     if (result) {
       const newCtxId = result.contextId;
+
+      // 3. Join the context so this node has an owned identity with private key
+      try {
+        const joinResult = await joinGroupContext(groupResult.groupId, newCtxId);
+        if (joinResult?.memberPublicKey) {
+          setExecutorPublicKey(joinResult.memberPublicKey);
+          setLobbyJoined(true);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '';
+        if (message.includes('already')) {
+          setLobbyJoined(true);
+        }
+      }
+
       addKnownLobby(newCtxId, name || 'lobby');
       setSelectedLobbyId(newCtxId);
       persistSelectedLobbyId(newCtxId);
@@ -302,7 +324,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       return newCtxId;
     }
     return null;
-  }, [applicationId, createGroup, createContext, refetchContexts]);
+  }, [applicationId, createGroup, createContext, joinGroupContext, refetchContexts]);
 
   const invitePlayer = useCallback(async (validForSeconds = 86400) => {
     if (!lobbyContextId || !executorPublicKey) return null;
