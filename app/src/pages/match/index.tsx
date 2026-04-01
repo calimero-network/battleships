@@ -790,7 +790,7 @@ export default function MatchPage() {
   const handleCreateLobby = useCallback(async () => {
     const id = await lobby.createLobby(newLobbyName || undefined);
     if (id) {
-      setNewGroupName('');
+      setNewLobbyName('');
       show({ title: 'Lobby created', variant: 'success' });
     } else if (lobby.createLobbyError) {
       show({ title: lobby.createLobbyError.message, variant: 'error' });
