@@ -995,7 +995,7 @@ export default function MatchPage() {
                     type="text"
                     placeholder="Lobby name (optional)"
                     value={newLobbyName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onChange={(e) => setNewLobbyName(e.target.value)}
                   />
                   <Button type="submit" variant="success" disabled={lobby.createLobbyLoading}>
                     {lobby.createLobbyLoading ? 'Creating...' : 'Create'}
@@ -1136,7 +1136,7 @@ export default function MatchPage() {
                       </details>
                     )}
 
-                    {lobby.isAdmin && (
+                    {lobby.executorPublicKey && (
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <Button variant="secondary" onClick={handleCreateInvitation} disabled={lobby.inviteLoading}>
                           {lobby.inviteLoading ? 'Creating...' : 'Invite Player'}
