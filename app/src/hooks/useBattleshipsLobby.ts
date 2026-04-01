@@ -178,8 +178,10 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const autoJoinAttempted = useRef(false);
 
   // Auto-select: pick persisted lobby if valid, or fall back to first lobby
+  // Skip if user explicitly cleared the selection (Switch Lobby)
   useEffect(() => {
     if (lobbies.length === 0) return;
+    if (userCleared.current) return;
 
     // If current selection is valid, keep it
     if (selectedLobbyId && lobbies.some((l) => l.contextId === selectedLobbyId)) return;
@@ -255,12 +257,16 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const isAdmin = selfIdentity !== null
     && members.some((m) => m.identity === selfIdentity && m.role === 'Admin');
 
+  const userCleared = useRef(false);
+
   const selectLobby = useCallback((contextId: string) => {
+    userCleared.current = false;
     setSelectedLobbyId(contextId);
     persistSelectedLobbyId(contextId);
   }, []);
 
   const clearLobby = useCallback(() => {
+    userCleared.current = true;
     setSelectedLobbyId(null);
     persistSelectedLobbyId(null);
   }, []);
