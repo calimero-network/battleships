@@ -154,7 +154,16 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const {
     groupId,
     loading: groupLoading,
+    error: groupError,
   } = useContextGroup(rawContextId);
+
+  // Debug: trace group discovery chain
+  console.log('[lobby-hook] selectedLobbyId:', selectedLobbyId);
+  console.log('[lobby-hook] allContexts:', allContexts.map(c => c.contextId));
+  console.log('[lobby-hook] knownLobbies:', [...knownLobbies.keys()]);
+  console.log('[lobby-hook] lobbies:', lobbies.map(l => l.contextId));
+  console.log('[lobby-hook] selectedLobby:', selectedLobby?.contextId);
+  console.log('[lobby-hook] rawContextId:', rawContextId, 'groupId:', groupId, 'groupLoading:', groupLoading, 'groupError:', groupError?.message);
 
   const {
     members,
@@ -175,14 +184,24 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const [executorPublicKey, setExecutorPublicKey] = useState<string | null>(null);
   const autoJoinAttempted = useRef(false);
 
+  // Auto-select: pick persisted lobby if valid, or fall back to first lobby
   useEffect(() => {
-    if (!selectedLobbyId && lobbies.length > 0) {
-      const persisted = loadSelectedLobbyId();
-      const match = persisted ? lobbies.find((l) => l.contextId === persisted) : null;
-      if (match) {
-        setSelectedLobbyId(match.contextId);
-      }
+    if (lobbies.length === 0) return;
+
+    // If current selection is valid, keep it
+    if (selectedLobbyId && lobbies.some((l) => l.contextId === selectedLobbyId)) return;
+
+    // Try persisted value
+    const persisted = loadSelectedLobbyId();
+    const match = persisted ? lobbies.find((l) => l.contextId === persisted) : null;
+    if (match) {
+      setSelectedLobbyId(match.contextId);
+      return;
     }
+
+    // Fall back to first lobby
+    setSelectedLobbyId(lobbies[0].contextId);
+    persistSelectedLobbyId(lobbies[0].contextId);
   }, [lobbies, selectedLobbyId]);
 
   useEffect(() => {
