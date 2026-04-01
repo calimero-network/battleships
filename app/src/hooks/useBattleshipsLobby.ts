@@ -154,22 +154,33 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const {
     groupId,
     loading: groupLoading,
-    error: groupError,
   } = useContextGroup(rawContextId);
 
-  // Debug: trace group discovery chain
-  console.log('[lobby-hook] selectedLobbyId:', selectedLobbyId);
-  console.log('[lobby-hook] allContexts:', allContexts.map(c => c.contextId));
-  console.log('[lobby-hook] knownLobbies:', [...knownLobbies.keys()]);
-  console.log('[lobby-hook] lobbies:', lobbies.map(l => l.contextId));
-  console.log('[lobby-hook] selectedLobby:', selectedLobby?.contextId);
-  console.log('[lobby-hook] rawContextId:', rawContextId, 'groupId:', groupId, 'groupLoading:', groupLoading, 'groupError:', groupError?.message);
+  // Sync the auto-created group so this node can query its members
+  const [groupSynced, setGroupSynced] = useState(false);
+  const syncAttempted = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!mero || !groupId || syncAttempted.current === groupId) return;
+    syncAttempted.current = groupId;
+
+    (async () => {
+      try {
+        await mero.admin.syncGroup(groupId);
+      } catch {
+        // sync may fail if already synced — that's fine
+      }
+      setGroupSynced(true);
+    })();
+  }, [mero, groupId]);
+
+  const effectiveGroupId = groupSynced ? groupId : null;
 
   const {
     members,
     selfIdentity,
     loading: membersLoading,
-  } = useGroupMembers(groupId);
+  } = useGroupMembers(effectiveGroupId);
 
   const {
     joinGroupContext,
@@ -207,6 +218,8 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   useEffect(() => {
     setLobbyJoined(false);
     setExecutorPublicKey(null);
+    setGroupSynced(false);
+    syncAttempted.current = null;
     autoJoinAttempted.current = false;
   }, [selectedLobbyId]);
 
@@ -240,12 +253,12 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   }, [lobbyContextId, executorPublicKey, lobbyJoined]);
 
   useEffect(() => {
-    if (!groupId || !lobbyContextId || lobbyJoined || autoJoinAttempted.current || joinGroupContextLoading) return;
+    if (!effectiveGroupId || !lobbyContextId || lobbyJoined || autoJoinAttempted.current || joinGroupContextLoading) return;
     autoJoinAttempted.current = true;
 
     (async () => {
       try {
-        const result = await joinGroupContext(groupId, lobbyContextId);
+        const result = await joinGroupContext(effectiveGroupId, lobbyContextId);
         if (result) {
           setLobbyJoined(true);
           if (result.memberPublicKey) setExecutorPublicKey(result.memberPublicKey);
@@ -257,7 +270,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
         }
       }
     })();
-  }, [groupId, lobbyContextId, lobbyJoined, joinGroupContextLoading, joinGroupContext]);
+  }, [effectiveGroupId, lobbyContextId, lobbyJoined, joinGroupContextLoading, joinGroupContext]);
 
   const isAdmin = selfIdentity !== null
     && members.some((m) => m.identity === selfIdentity && m.role === 'Admin');
