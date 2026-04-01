@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useContexts,
   useCreateContext,
+  useCreateGroup,
   useContextGroup,
   useInviteToContext,
   useJoinContext,
@@ -156,38 +157,19 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     loading: groupLoading,
   } = useContextGroup(rawContextId);
 
-  // Sync the auto-created group so this node can query its members
-  const [groupSynced, setGroupSynced] = useState(false);
-  const syncAttempted = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!mero || !groupId || syncAttempted.current === groupId) return;
-    syncAttempted.current = groupId;
-
-    (async () => {
-      try {
-        await mero.admin.syncGroup(groupId);
-      } catch {
-        // sync may fail if already synced — that's fine
-      }
-      setGroupSynced(true);
-    })();
-  }, [mero, groupId]);
-
-  const effectiveGroupId = groupSynced ? groupId : null;
-
   const {
     members,
     selfIdentity,
     loading: membersLoading,
-  } = useGroupMembers(effectiveGroupId);
+  } = useGroupMembers(groupId);
 
   const {
     joinGroupContext,
     loading: joinGroupContextLoading,
   } = useJoinGroupContext();
 
-  const { createContext, loading: createLobbyLoading, error: createLobbyError } = useCreateContext();
+  const { createContext, loading: createContextLoading, error: createContextError } = useCreateContext();
+  const { createGroup, loading: createGroupLoading, error: createGroupError } = useCreateGroup();
   const { inviteToContext, loading: inviteLoading } = useInviteToContext();
   const { joinContext, loading: joinContextLoading } = useJoinContext();
 
@@ -218,8 +200,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   useEffect(() => {
     setLobbyJoined(false);
     setExecutorPublicKey(null);
-    setGroupSynced(false);
-    syncAttempted.current = null;
     autoJoinAttempted.current = false;
   }, [selectedLobbyId]);
 
@@ -253,12 +233,12 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   }, [lobbyContextId, executorPublicKey, lobbyJoined]);
 
   useEffect(() => {
-    if (!effectiveGroupId || !lobbyContextId || lobbyJoined || autoJoinAttempted.current || joinGroupContextLoading) return;
+    if (!groupId || !lobbyContextId || lobbyJoined || autoJoinAttempted.current || joinGroupContextLoading) return;
     autoJoinAttempted.current = true;
 
     (async () => {
       try {
-        const result = await joinGroupContext(effectiveGroupId, lobbyContextId);
+        const result = await joinGroupContext(groupId, lobbyContextId);
         if (result) {
           setLobbyJoined(true);
           if (result.memberPublicKey) setExecutorPublicKey(result.memberPublicKey);
@@ -270,7 +250,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
         }
       }
     })();
-  }, [effectiveGroupId, lobbyContextId, lobbyJoined, joinGroupContextLoading, joinGroupContext]);
+  }, [groupId, lobbyContextId, lobbyJoined, joinGroupContextLoading, joinGroupContext]);
 
   const isAdmin = selfIdentity !== null
     && members.some((m) => m.identity === selfIdentity && m.role === 'Admin');
@@ -288,12 +268,22 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const createLobby = useCallback(async (name?: string) => {
     if (!applicationId) return null;
 
+    // 1. Create a group first (invisible to user)
+    const groupResult = await createGroup({
+      applicationId,
+      upgradePolicy: 'Automatic',
+      alias: name || undefined,
+    });
+    if (!groupResult) return null;
+
+    // 2. Create the lobby context inside that group
     const initParams = JSON.stringify({ context_type: 'Lobby' });
     const initBytes = Array.from(new TextEncoder().encode(initParams));
 
     const result = await createContext({
       applicationId,
       initializationParams: initBytes,
+      groupId: groupResult.groupId,
       alias: name || 'lobby',
     });
 
@@ -306,7 +296,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       return newCtxId;
     }
     return null;
-  }, [applicationId, createContext, refetchContexts]);
+  }, [applicationId, createGroup, createContext, refetchContexts]);
 
   const invitePlayer = useCallback(async (validForSeconds = 86400) => {
     if (!lobbyContextId || !executorPublicKey) return null;
@@ -359,8 +349,8 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     refetchLobbies: refetchContexts,
 
     createLobby,
-    createLobbyLoading: createLobbyLoading,
-    createLobbyError: createLobbyError,
+    createLobbyLoading: createGroupLoading || createContextLoading,
+    createLobbyError: createGroupError || createContextError,
 
     groupId,
     groupLoading,
