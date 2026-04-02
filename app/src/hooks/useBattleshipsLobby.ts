@@ -53,6 +53,29 @@ export interface UseBattleshipsLobbyReturn {
   refetchContexts: () => Promise<void>;
 }
 
+interface ShouldAutoJoinGroupContextOptions {
+  groupId: string | null;
+  lobbyContextId: string | null;
+  lobbyJoined: boolean;
+  autoJoinAttempted: boolean;
+  joinGroupContextLoading: boolean;
+  lastJoinContextId: string | null;
+}
+
+export function shouldAutoJoinGroupContext({
+  groupId,
+  lobbyContextId,
+  lobbyJoined,
+  autoJoinAttempted,
+  joinGroupContextLoading,
+  lastJoinContextId,
+}: ShouldAutoJoinGroupContextOptions): boolean {
+  if (!groupId || !lobbyContextId) return false;
+  if (lobbyJoined || autoJoinAttempted || joinGroupContextLoading) return false;
+  if (lastJoinContextId === lobbyContextId) return false;
+  return true;
+}
+
 function loadSelectedLobbyId(): string | null {
   try {
     return localStorage.getItem(SELECTED_LOBBY_KEY);
@@ -117,6 +140,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const [lobbyJoined, setLobbyJoined] = useState(false);
   const [executorPublicKey, setExecutorPublicKey] = useState<string | null>(null);
   const autoJoinAttempted = useRef(false);
+  const lastJoinContextId = useRef<string | null>(null);
 
   // Auto-select: pick persisted lobby if valid, or fall back to first lobby
   // Skip if user explicitly cleared the selection (Switch Lobby)
@@ -181,7 +205,18 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   }, [lobbyContextId, executorPublicKey, lobbyJoined]);
 
   useEffect(() => {
-    if (!groupId || !lobbyContextId || lobbyJoined || autoJoinAttempted.current || joinGroupContextLoading) return;
+    if (
+      !shouldAutoJoinGroupContext({
+        groupId,
+        lobbyContextId,
+        lobbyJoined,
+        autoJoinAttempted: autoJoinAttempted.current,
+        joinGroupContextLoading,
+        lastJoinContextId: lastJoinContextId.current,
+      })
+    ) {
+      return;
+    }
     autoJoinAttempted.current = true;
 
     (async () => {
@@ -272,6 +307,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       });
 
       if (result) {
+        lastJoinContextId.current = result.contextId;
         setSelectedLobbyId(result.contextId);
         persistSelectedLobbyId(result.contextId);
         await refetchContexts();

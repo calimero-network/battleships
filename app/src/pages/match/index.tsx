@@ -29,6 +29,7 @@ import type { MatchSummary } from '../../api/AbiClient';
 import type { AllGameEvents } from '../../types/events';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 import { useBattleshipsLobby } from '../../hooks/useBattleshipsLobby';
+import { resolveEffectiveMatchId, SHIP_TARGETS, validateFleetPayload } from './config';
 
 export default function MatchPage() {
   const navigate = useNavigate();
@@ -69,6 +70,7 @@ export default function MatchPage() {
 
   // Match management
   const [matchId, setMatchId] = useState<string>('');
+  const [runtimeMatchId, setRuntimeMatchId] = useState<string | null>(null);
   const [player2, setPlayer2] = useState<string>('');
   const [myMatches, setMyMatches] = useState<MatchSummary[]>([]);
   const [creatingMatch, setCreatingMatch] = useState(false);
@@ -92,7 +94,7 @@ export default function MatchPage() {
   );
   const [selectedShip, setSelectedShip] = useState<number | null>(null);
   const [shipCounts, setShipCounts] = useState<number[]>([0, 0, 0, 0]);
-  const [shipTargets] = useState<number[]>([1, 1, 2, 1]);
+  const [shipTargets] = useState<number[]>([...SHIP_TARGETS]);
   const [isHorizontal, setIsHorizontal] = useState<boolean>(true);
   const [isRemovalMode, setIsRemovalMode] = useState<boolean>(false);
 
@@ -103,6 +105,43 @@ export default function MatchPage() {
   const [selectedShotY, setSelectedShotY] = useState<number | null>(null);
 
   const loadingRef = useRef<boolean>(false);
+  const effectiveMatchId = resolveEffectiveMatchId(matchId, runtimeMatchId);
+  const [matchApiReady, setMatchApiReady] = useState(false);
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+
+  const isUninitializedError = (error: unknown): boolean => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : '';
+    return message.includes('Uninitialized');
+  };
+
+  const ensureMatchContextReady = useCallback(
+    async (client: AbiClient, attempts = 10, delayMs = 400): Promise<void> => {
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          await client.getActiveMatchId();
+          return;
+        } catch (error) {
+          if (!isUninitializedError(error)) {
+            throw error;
+          }
+          if (attempt === attempts - 1) {
+            throw error;
+          }
+          await sleep(delayMs);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/');
@@ -122,16 +161,17 @@ export default function MatchPage() {
     const urlContextId = params.get('context_id');
     if (urlMatchId && urlContextId && location.pathname === '/match') {
       setMatchId(urlMatchId);
+      setRuntimeMatchId(null);
       setMatchContextId(urlContextId);
       setView('game');
     }
   }, [location.pathname, location.search]);
 
   const loadBoards = useCallback(async () => {
-    if (!matchApi || !matchId) return;
+    if (!matchApi || !effectiveMatchId) return;
     try {
-      const own = await matchApi.getOwnBoard({ match_id: matchId });
-      const shots = await matchApi.getShots({ match_id: matchId });
+      const own = await matchApi.getOwnBoard({ match_id: effectiveMatchId });
+      const shots = await matchApi.getShots({ match_id: effectiveMatchId });
       setSize(own.size);
       const ownArr = own.board.toArray();
       const shotsArr = shots.shots.toArray();
@@ -142,17 +182,17 @@ export default function MatchPage() {
     } catch {
       // board not yet available
     }
-  }, [matchApi, matchId]);
+  }, [matchApi, effectiveMatchId]);
 
   const loadTurnInfo = useCallback(async () => {
-    if (!matchApi || !matchId) return;
+    if (!matchApi || !effectiveMatchId) return;
     try {
       const turn = await matchApi.getCurrentTurn();
       setCurrentTurn(turn);
     } catch {
       // turn info not yet available
     }
-  }, [matchApi, matchId]);
+  }, [matchApi, effectiveMatchId]);
 
   useEffect(() => {
     if (currentUser && currentTurn) {
@@ -219,7 +259,7 @@ export default function MatchPage() {
   const { isSubscribed: isEventSubscribed } = useGameSubscriptions({
     contextId: subscriptionContextId,
     lobbyContextId: lobbySubscriptionContextId,
-    matchId,
+    matchId: effectiveMatchId,
     onBoardUpdate: handleBoardUpdate,
     onTurnUpdate: handleTurnUpdate,
     onGameEvent: handleGameEvent,
@@ -272,10 +312,13 @@ export default function MatchPage() {
   useEffect(() => {
     if (!mero || !matchContextId || view !== 'game') {
       setMatchApi(null);
+      setMatchApiReady(false);
       return;
     }
 
     const executorKey = lobby.executorPublicKey ?? contextIdentity;
+    let cancelled = false;
+    setMatchApiReady(false);
 
     (async () => {
       try {
@@ -284,20 +327,89 @@ export default function MatchPage() {
           contextIdentity: executorKey,
           role: 'match' as ContextRole,
         });
-        setMatchApi(client);
+        await ensureMatchContextReady(client);
+        if (!cancelled) {
+          setMatchApi(client);
+          setMatchApiReady(true);
+        }
       } catch (e) {
-        console.error(e);
-        show({ title: 'Failed to initialize match API client', variant: 'error' });
+        const message = e instanceof Error ? e.message : '';
+        const missingContextLocally = message.includes(
+          'The requested context is not available on this node.',
+        );
+
+        if (missingContextLocally && lobby.groupId) {
+          try {
+            await mero.admin.joinGroupContext(lobby.groupId, matchContextId);
+            const { client } = await createKvClient(mero, {
+              contextId: matchContextId,
+              contextIdentity: executorKey,
+              role: 'match' as ContextRole,
+            });
+            await ensureMatchContextReady(client);
+            if (!cancelled) {
+              setMatchApi(client);
+              setMatchApiReady(true);
+            }
+            return;
+          } catch (joinErr) {
+            console.error('joinGroupContext fallback failed:', joinErr);
+          }
+        } else {
+          console.error(e);
+        }
+
+        if (!cancelled) {
+          setMatchApi(null);
+          setMatchApiReady(false);
+          show({ title: 'Failed to initialize match API client', variant: 'error' });
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     contextIdentity,
     lobby.executorPublicKey,
+    lobby.groupId,
     matchContextId,
     mero,
     show,
     view,
+    ensureMatchContextReady,
   ]);
+
+  useEffect(() => {
+    if (!matchApi || view !== 'game') {
+      setRuntimeMatchId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const activeId = await matchApi.getActiveMatchId();
+        if (!cancelled) {
+          setRuntimeMatchId(
+            typeof activeId === 'string' && activeId.trim().length > 0
+              ? activeId
+              : null,
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setRuntimeMatchId(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matchApi, view]);
 
   const createMatch = useCallback(async () => {
     if (!lobbyApi || !mero || !currentContext) return;
@@ -339,6 +451,7 @@ export default function MatchPage() {
 
       // 5. Navigate to the match with both identifiers
       setMatchId(id);
+      setRuntimeMatchId(null);
       setMatchContextId(newContextId);
       setView('game');
       navigate(`/match?match_id=${encodeURIComponent(id)}&context_id=${encodeURIComponent(newContextId)}`, { replace: true });
@@ -357,6 +470,7 @@ export default function MatchPage() {
   const openGame = useCallback(
     (id: string, contextId: string) => {
       setMatchId(id);
+      setRuntimeMatchId(null);
       setMatchContextId(contextId);
       setView('game');
       navigate(
@@ -375,8 +489,11 @@ export default function MatchPage() {
   }, [view, loadBoards, loadTurnInfo]);
 
   const placeShips = useCallback(async () => {
-    if (!matchApi) return;
-    if (!matchId) {
+    if (!matchApi || !matchApiReady) {
+      show({ title: 'Match context is still syncing, try again in a moment', variant: 'warning' });
+      return;
+    }
+    if (!effectiveMatchId) {
       show({ title: 'Set match id first', variant: 'error' });
       return;
     }
@@ -405,7 +522,14 @@ export default function MatchPage() {
         loadingRef.current = false;
         return;
       }
-      await matchApi.placeShips({ match_id: matchId, ships: groups });
+      const fleetError = validateFleetPayload(groups);
+      if (fleetError) {
+        show({ title: fleetError, variant: 'error' });
+        loadingRef.current = false;
+        return;
+      }
+      await ensureMatchContextReady(matchApi);
+      await matchApi.placeShips({ match_id: effectiveMatchId, ships: groups });
       show({ title: 'Ships placed', variant: 'success' });
       await loadBoards();
       await loadTurnInfo();
@@ -418,12 +542,15 @@ export default function MatchPage() {
     } finally {
       loadingRef.current = false;
     }
-  }, [matchApi, matchId, grid, size, show, loadBoards, loadTurnInfo]);
+  }, [matchApi, matchApiReady, effectiveMatchId, grid, size, show, loadBoards, loadTurnInfo, ensureMatchContextReady]);
 
   const proposeShot = useCallback(
     async (shotX?: number, shotY?: number) => {
-      if (!matchApi) return;
-      if (!matchId) {
+      if (!matchApi || !matchApiReady) {
+        show({ title: 'Match context is still syncing, try again in a moment', variant: 'warning' });
+        return;
+      }
+      if (!effectiveMatchId) {
         show({ title: 'Set match id first', variant: 'error' });
         return;
       }
@@ -432,7 +559,8 @@ export default function MatchPage() {
       try {
         const finalX = shotX !== undefined ? shotX : parseInt(x || '0', 10);
         const finalY = shotY !== undefined ? shotY : parseInt(y || '0', 10);
-        await matchApi.proposeShot({ match_id: matchId, x: finalX, y: finalY });
+        await ensureMatchContextReady(matchApi);
+        await matchApi.proposeShot({ match_id: effectiveMatchId, x: finalX, y: finalY });
         show({
           title: `Shot proposed at (${finalX},${finalY})`,
           variant: 'success',
@@ -454,7 +582,7 @@ export default function MatchPage() {
         loadingRef.current = false;
       }
     },
-    [matchApi, matchId, x, y, show, loadBoards, loadTurnInfo],
+    [matchApi, matchApiReady, effectiveMatchId, x, y, show, loadBoards, loadTurnInfo, ensureMatchContextReady],
   );
 
   const handleShotGridClick = useCallback(
@@ -532,11 +660,9 @@ export default function MatchPage() {
           });
         }
       } else if (selectedShip === null) {
-        // single cell toggle
-        setGrid((prev) => {
-          const next = prev.map((row) => row.slice());
-          next[y][x] = !next[y][x];
-          return next;
+        show({
+          title: 'Select a ship length before placing',
+          variant: 'warning',
         });
       } else {
         // place ship of selected length
@@ -559,6 +685,32 @@ export default function MatchPage() {
         }
 
         if (coords.length === shipLen) {
+          const coordsSet = new Set(coords.map(([nx, ny]) => `${nx},${ny}`));
+          const hasAdjacentExisting = coords.some(([nx, ny]) =>
+            [
+              [nx + 1, ny],
+              [nx - 1, ny],
+              [nx, ny + 1],
+              [nx, ny - 1],
+              [nx + 1, ny + 1],
+              [nx + 1, ny - 1],
+              [nx - 1, ny + 1],
+              [nx - 1, ny - 1],
+            ].some(([ax, ay]) => {
+              if (ax < 0 || ay < 0 || ax >= size || ay >= size) return false;
+              if (coordsSet.has(`${ax},${ay}`)) return false;
+              return grid[ay][ax];
+            }),
+          );
+
+          if (hasAdjacentExisting) {
+            show({
+              title: 'Ships cannot touch each other',
+              variant: 'error',
+            });
+            return;
+          }
+
           setGrid((prev) => {
             const next = prev.map((row) => row.slice());
             coords.forEach(([nx, ny]) => (next[ny][nx] = true));
@@ -886,6 +1038,7 @@ export default function MatchPage() {
                   setMatchApi(null);
                   setMatchContextId(null);
                   setMatchId('');
+                  setRuntimeMatchId(null);
                   setCurrentContext(null);
                   setMyMatches([]);
                   setPlaced(false);
@@ -1286,6 +1439,7 @@ export default function MatchPage() {
       {renderNavbar(
         <Button variant="secondary" onClick={() => {
           setMatchId('');
+          setRuntimeMatchId(null);
           setMatchContextId(null);
           setMatchApi(null);
           setPlaced(false);
@@ -1331,7 +1485,7 @@ export default function MatchPage() {
             >
               <Card variant="rounded">
                 <CardHeader>
-                  <CardTitle>Match: {matchId}</CardTitle>
+                  <CardTitle>Match: {effectiveMatchId}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div
@@ -1485,7 +1639,7 @@ export default function MatchPage() {
                             {isRemovalMode
                               ? 'Click ships to remove them'
                               : selectedShip === null
-                                ? 'Click cells to toggle'
+                                ? 'Select a ship length to place'
                                 : `Click to place ship of length ${selectedShip + 2} (${isHorizontal ? 'horizontal' : 'vertical'})`}
                           </div>
                           {renderGrid('Click to place ships', true)}
@@ -1493,9 +1647,10 @@ export default function MatchPage() {
                             type="button"
                             variant="primary"
                             onClick={placeShips}
-                            disabled={shipCounts.some(
-                              (c, i) => c !== shipTargets[i],
-                            )}
+                            disabled={
+                              !matchApiReady ||
+                              shipCounts.some((c, i) => c !== shipTargets[i])
+                            }
                           >
                             Place Fleet
                           </Button>
@@ -1585,6 +1740,7 @@ export default function MatchPage() {
                               <Button
                                 variant="success"
                                 disabled={
+                                  !matchApiReady ||
                                   !isMyTurn ||
                                   selectedShotX === null ||
                                   selectedShotY === null
