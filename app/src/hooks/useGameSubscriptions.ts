@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSubscription } from '@calimero-network/mero-react';
 import type { AllGameEvents } from '../types/events';
+import { isLobbyEvent } from '../types/events';
 
 export interface UseGameSubscriptionsOptions {
+  /** Primary context to subscribe to (Match context when in-game, Lobby otherwise). */
   contextId: string;
+  /** Optional second context so Lobby events keep flowing while in a Match. */
+  lobbyContextId?: string;
   matchId?: string;
   onBoardUpdate?: () => void;
   onTurnUpdate?: () => void;
@@ -59,19 +63,16 @@ function toGameEvent(
     return null;
   }
 
-  const id = payload.id;
-  if (typeof id !== 'string') {
-    return null;
-  }
+  const id = typeof payload.id === 'string' ? payload.id : '';
 
   switch (eventType) {
     case 'MatchCreated':
-      return { type: 'MatchCreated', id };
+      return id ? { type: 'MatchCreated', id } : null;
     case 'ShipsPlaced':
-      return { type: 'ShipsPlaced', id };
+      return id ? { type: 'ShipsPlaced', id } : null;
     case 'ShotProposed': {
       const { x, y } = payload;
-      if (typeof x !== 'number' || typeof y !== 'number') {
+      if (!id || typeof x !== 'number' || typeof y !== 'number') {
         return null;
       }
 
@@ -80,6 +81,7 @@ function toGameEvent(
     case 'ShotFired': {
       const { x, y, result } = payload;
       if (
+        !id ||
         typeof x !== 'number' ||
         typeof y !== 'number' ||
         typeof result !== 'string'
@@ -90,9 +92,13 @@ function toGameEvent(
       return { type: 'ShotFired', id, x, y, result };
     }
     case 'Winner':
-      return { type: 'Winner', id };
+      return id ? { type: 'Winner', id } : null;
     case 'MatchEnded':
-      return { type: 'MatchEnded', id };
+      return id ? { type: 'MatchEnded', id } : null;
+    case 'MatchListUpdated':
+      return { type: 'MatchListUpdated', id };
+    case 'PlayerStatsUpdated':
+      return { type: 'PlayerStatsUpdated', id };
     default:
       return null;
   }
@@ -145,6 +151,10 @@ export function matchesActiveMatch(
   activeMatchId: string | undefined,
   event: AllGameEvents,
 ): boolean {
+  if (isLobbyEvent(event)) {
+    return true;
+  }
+
   if (activeMatchId === undefined) {
     return true;
   }
@@ -169,6 +179,9 @@ export function getGameEventEffects(event: AllGameEvents): {
     case 'ShotProposed':
     case 'ShotFired':
       return { board: 'immediate', turn: 'immediate' };
+    case 'MatchListUpdated':
+    case 'PlayerStatsUpdated':
+      return { board: 'none', turn: 'none' };
     default: {
       const exhaustiveEvent: never = event;
       return exhaustiveEvent;
@@ -176,8 +189,29 @@ export function getGameEventEffects(event: AllGameEvents): {
   }
 }
 
+/**
+ * Build the deduplicated list of context ids to subscribe to.
+ *
+ * When a separate `lobbyContextId` is provided (e.g. while the player is
+ * inside a Match context), both contexts are subscribed so Lobby-level
+ * events (match list updates, stats) keep flowing alongside Match events.
+ */
+function buildContextIds(
+  contextId: string,
+  lobbyContextId: string | undefined,
+  isEnabled: boolean,
+): string[] {
+  if (!isEnabled) return [];
+
+  const ids: string[] = [];
+  if (contextId) ids.push(contextId);
+  if (lobbyContextId && lobbyContextId !== contextId) ids.push(lobbyContextId);
+  return ids;
+}
+
 export function useGameSubscriptions({
   contextId,
+  lobbyContextId,
   matchId,
   onBoardUpdate,
   onTurnUpdate,
@@ -256,13 +290,10 @@ export function useGameSubscriptions({
     setIsConnecting(false);
   }, []);
 
-  const contextIds = useMemo(() => {
-    if (!contextId || !isEnabled) {
-      return [];
-    }
-
-    return [contextId];
-  }, [contextId, isEnabled]);
+  const contextIds = useMemo(
+    () => buildContextIds(contextId, lobbyContextId, isEnabled),
+    [contextId, lobbyContextId, isEnabled],
+  );
 
   useEffect(() => {
     if (contextIds.length === 0) {

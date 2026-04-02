@@ -16,6 +16,17 @@ export interface ShotsView {
   shots: CalimeroBytes;
 }
 
+export type MatchStatus = 'Pending' | 'Active' | 'Finished';
+
+export interface MatchSummary {
+  match_id: string;
+  player1: string;
+  player2: string;
+  status: MatchStatus;
+  context_id: string | null;
+  winner: string | null;
+}
+
 
 /**
  * Utility class for handling byte conversions in Calimero
@@ -184,9 +195,17 @@ export class AbiClient {
   /**
    * get_matches
    */
-  public async getMatches(): Promise<string[]> {
+  public async getMatches(): Promise<MatchSummary[]> {
     const response = await this.mero.rpc.execute({ contextId: this.contextId, method: 'get_matches', argsJson: {}, executorPublicKey: this.executorPublicKey });
-    return response as string[];
+    return response as MatchSummary[];
+  }
+
+  /**
+   * set_match_context_id
+   */
+  public async setMatchContextId(params: { match_id: string; context_id: string }): Promise<void> {
+    const response = await this.mero.rpc.execute({ contextId: this.contextId, method: 'set_match_context_id', argsJson: params, executorPublicKey: this.executorPublicKey });
+    return response as void;
   }
 
   /**

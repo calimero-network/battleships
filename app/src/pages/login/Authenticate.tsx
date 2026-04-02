@@ -15,18 +15,17 @@ import {
 } from '@calimero-network/mero-ui';
 import {
   useMero,
+  ConnectButton,
 } from '@calimero-network/mero-react';
 import translations from '../../constants/en.global.json';
 
 export default function Authenticate() {
   const navigate = useNavigate();
-  const { connectToNode, isAuthenticated } = useMero();
-  const defaultNodeUrl =
-    import.meta.env.VITE_NODE_URL?.trim() || 'http://node1.127.0.0.1.nip.io';
+  const { isAuthenticated } = useMero();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/match');
+      navigate('/lobby');
     }
   }, [isAuthenticated, navigate]);
 
@@ -36,9 +35,7 @@ export default function Authenticate() {
         <NavbarBrand text="Battleship" />
         <NavbarMenu align="right">
           <NavbarItem>
-            <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
-              Connect
-            </Button>
+            <ConnectButton />
           </NavbarItem>
         </NavbarMenu>
       </MeroNavbar>

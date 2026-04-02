@@ -111,3 +111,7 @@ temp/
 data/calimero-node-*/calimero-node-*/data/
 data/calimero-node-*/calimero-node-*/blobs/
 data/*.wasm
+
+# Bundle build artifacts
+logic/res/bundle-temp/
+logic/res/*.mpk

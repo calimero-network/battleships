@@ -6,6 +6,8 @@ import {
   parseSubscriptionEvents,
   parseSubscriptionEvent,
 } from './useGameSubscriptions';
+import { isLobbyEvent, isMatchEvent } from '../types/events';
+import type { AllGameEvents } from '../types/events';
 
 describe('parseSubscriptionEvent', () => {
   it('parses direct emitted event payloads', () => {
@@ -87,6 +89,22 @@ describe('parseSubscriptionEvent', () => {
       },
     ]);
   });
+
+  it('parses lobby events (MatchListUpdated, PlayerStatsUpdated)', () => {
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'MatchListUpdated',
+        id: '',
+      }),
+    ).toEqual({ type: 'MatchListUpdated', id: '' });
+
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'PlayerStatsUpdated',
+        id: '',
+      }),
+    ).toEqual({ type: 'PlayerStatsUpdated', id: '' });
+  });
 });
 
 describe('matchesActiveMatch', () => {
@@ -99,22 +117,36 @@ describe('matchesActiveMatch', () => {
     ).toBe(true);
   });
 
-  it('filters out events from other matches', () => {
+  it('filters out match events from other matches', () => {
     expect(
       matchesActiveMatch('match-1', {
-        type: 'MatchCreated',
+        type: 'ShipsPlaced',
         id: 'match-2',
       }),
     ).toBe(false);
   });
 
-  it('ignores events when the active match id is blank', () => {
+  it('ignores match events when the active match id is blank', () => {
     expect(
       matchesActiveMatch('', {
-        type: 'MatchCreated',
+        type: 'ShipsPlaced',
         id: 'match-1',
       }),
     ).toBe(false);
+  });
+
+  it('always passes lobby events regardless of active match', () => {
+    expect(
+      matchesActiveMatch('match-1', { type: 'MatchListUpdated', id: '' }),
+    ).toBe(true);
+
+    expect(
+      matchesActiveMatch('match-1', { type: 'PlayerStatsUpdated', id: '' }),
+    ).toBe(true);
+
+    expect(
+      matchesActiveMatch('match-1', { type: 'MatchCreated', id: 'lobby-match' }),
+    ).toBe(true);
   });
 });
 
@@ -143,5 +175,45 @@ describe('getGameEventEffects', () => {
       board: 'debounced',
       turn: 'none',
     });
+  });
+
+  it('returns no effects for lobby-only events', () => {
+    expect(
+      getGameEventEffects({ type: 'MatchListUpdated', id: '' }),
+    ).toEqual({ board: 'none', turn: 'none' });
+
+    expect(
+      getGameEventEffects({ type: 'PlayerStatsUpdated', id: '' }),
+    ).toEqual({ board: 'none', turn: 'none' });
+  });
+});
+
+describe('isLobbyEvent / isMatchEvent', () => {
+  const lobbyEvents: AllGameEvents[] = [
+    { type: 'MatchCreated', id: 'x' },
+    { type: 'MatchListUpdated', id: '' },
+    { type: 'PlayerStatsUpdated', id: '' },
+  ];
+
+  const matchEvents: AllGameEvents[] = [
+    { type: 'ShipsPlaced', id: 'x' },
+    { type: 'ShotProposed', id: 'x', x: 0, y: 0 },
+    { type: 'ShotFired', id: 'x', x: 0, y: 0, result: 'miss' },
+    { type: 'Winner', id: 'x' },
+    { type: 'MatchEnded', id: 'x' },
+  ];
+
+  it('classifies lobby events correctly', () => {
+    for (const event of lobbyEvents) {
+      expect(isLobbyEvent(event)).toBe(true);
+      expect(isMatchEvent(event)).toBe(false);
+    }
+  });
+
+  it('classifies match events correctly', () => {
+    for (const event of matchEvents) {
+      expect(isMatchEvent(event)).toBe(true);
+      expect(isLobbyEvent(event)).toBe(false);
+    }
   });
 });

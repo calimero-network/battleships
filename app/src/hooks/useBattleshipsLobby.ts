@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useContexts,
   useCreateContext,
-  useCreateGroup,
   useContextGroup,
   useInviteToContext,
   useJoinContext,
@@ -13,7 +12,6 @@ import {
 import type { GroupMember } from '@calimero-network/mero-react';
 
 const SELECTED_LOBBY_KEY = 'battleships:selectedLobbyCtxId';
-const KNOWN_LOBBIES_KEY = 'battleships:lobbyContextIds';
 
 export interface LobbyRecord {
   contextId: string;
@@ -75,57 +73,6 @@ function persistSelectedLobbyId(contextId: string | null) {
   }
 }
 
-function loadKnownLobbies(): Map<string, string | undefined> {
-  try {
-    const raw = localStorage.getItem(KNOWN_LOBBIES_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      // Support old format (string[]) and new format (Record<string, string|null>)
-      if (Array.isArray(parsed)) {
-        return new Map(parsed.map((id: string) => [id, undefined]));
-      }
-      if (typeof parsed === 'object' && parsed !== null) {
-        return new Map(Object.entries(parsed).map(([k, v]) => [k, (v as string) || undefined]));
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return new Map();
-}
-
-function addKnownLobby(contextId: string, alias?: string) {
-  try {
-    const lobbies = loadKnownLobbies();
-    lobbies.set(contextId, alias);
-    localStorage.setItem(KNOWN_LOBBIES_KEY, JSON.stringify(Object.fromEntries(lobbies)));
-  } catch {
-    // storage unavailable
-  }
-}
-
-function hexToBase58(hex: string): string {
-  const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)));
-  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let num = 0n;
-  for (const byte of bytes) {
-    num = num * 256n + BigInt(byte);
-  }
-  let encoded = '';
-  while (num > 0n) {
-    encoded = ALPHABET[Number(num % 58n)] + encoded;
-    num = num / 58n;
-  }
-  for (const byte of bytes) {
-    if (byte === 0) {
-      encoded = '1' + encoded;
-    } else {
-      break;
-    }
-  }
-  return encoded || '1';
-}
-
 const ENV_APPLICATION_ID = import.meta.env.VITE_APPLICATION_ID?.trim() || null;
 
 export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
@@ -139,18 +86,13 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     refetch: refetchContexts,
   } = useContexts(applicationId);
 
-  const knownLobbies = loadKnownLobbies();
-  const lobbies: LobbyRecord[] = allContexts
-    .filter((c) => knownLobbies.has(c.contextId))
-    .map((c) => ({ ...c, alias: knownLobbies.get(c.contextId) }));
+  const lobbies: LobbyRecord[] = allContexts;
 
   const [selectedLobbyId, setSelectedLobbyId] = useState<string | null>(loadSelectedLobbyId);
   const selectedLobby = lobbies.find((l) => l.contextId === selectedLobbyId) ?? null;
 
   const rawContextId = selectedLobby?.contextId ?? null;
-  const lobbyContextId = rawContextId && /^[0-9a-fA-F]+$/.test(rawContextId)
-    ? hexToBase58(rawContextId)
-    : rawContextId;
+  const lobbyContextId = rawContextId;
 
   const {
     groupId,
@@ -169,7 +111,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   } = useJoinGroupContext();
 
   const { createContext, loading: createContextLoading, error: createContextError } = useCreateContext();
-  const { createGroup, loading: createGroupLoading, error: createGroupError } = useCreateGroup();
   const { inviteToContext, loading: inviteLoading } = useInviteToContext();
   const { joinContext, loading: joinContextLoading } = useJoinContext();
 
@@ -214,8 +155,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       try {
         // Always prefer context-specific owned identity (has private key on this node)
         const { identities } = await mero.admin.getContextIdentitiesOwned(lobbyContextId);
-        console.log('[lobby-hook] owned identities for', lobbyContextId, ':', identities);
-        console.log('[lobby-hook] contextIdentity from provider:', contextIdentity);
         if (!cancelled && identities.length > 0) {
           setExecutorPublicKey(identities[0]);
           return;
@@ -281,50 +220,30 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const createLobby = useCallback(async (name?: string) => {
     if (!applicationId) return null;
 
-    // 1. Create a group first (invisible to user)
-    const groupResult = await createGroup({
-      applicationId,
-      upgradePolicy: 'Automatic',
-      alias: name || undefined,
-    });
-    if (!groupResult) return null;
-
-    // 2. Create the lobby context inside that group
+    // Create lobby context without groupId — core auto-creates the group
     const initParams = JSON.stringify({ context_type: 'Lobby' });
     const initBytes = Array.from(new TextEncoder().encode(initParams));
 
     const result = await createContext({
       applicationId,
       initializationParams: initBytes,
-      groupId: groupResult.groupId,
       alias: name || 'lobby',
     });
 
     if (result) {
       const newCtxId = result.contextId;
+      // Use the memberPublicKey returned by createContext — this is the identity
+      // that core created with a private key for this context
+      setExecutorPublicKey(result.memberPublicKey);
+      setLobbyJoined(true);
 
-      // 3. Join the context so this node has an owned identity with private key
-      try {
-        const joinResult = await joinGroupContext(groupResult.groupId, newCtxId);
-        if (joinResult?.memberPublicKey) {
-          setExecutorPublicKey(joinResult.memberPublicKey);
-          setLobbyJoined(true);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : '';
-        if (message.includes('already')) {
-          setLobbyJoined(true);
-        }
-      }
-
-      addKnownLobby(newCtxId, name || 'lobby');
       setSelectedLobbyId(newCtxId);
       persistSelectedLobbyId(newCtxId);
       await refetchContexts();
       return newCtxId;
     }
     return null;
-  }, [applicationId, createGroup, createContext, joinGroupContext, refetchContexts]);
+  }, [applicationId, createContext, refetchContexts]);
 
   const invitePlayer = useCallback(async (validForSeconds = 86400) => {
     if (!lobbyContextId || !executorPublicKey) return null;
@@ -353,7 +272,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       });
 
       if (result) {
-        addKnownLobby(result.contextId);
         setSelectedLobbyId(result.contextId);
         persistSelectedLobbyId(result.contextId);
         await refetchContexts();
@@ -377,8 +295,8 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     refetchLobbies: refetchContexts,
 
     createLobby,
-    createLobbyLoading: createGroupLoading || createContextLoading,
-    createLobbyError: createGroupError || createContextError,
+    createLobbyLoading: createContextLoading,
+    createLobbyError: createContextError,
 
     groupId,
     groupLoading,

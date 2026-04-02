@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppMode, MeroProvider } from '@calimero-network/mero-react';
 import { ToastProvider } from '@calimero-network/mero-ui';
 
@@ -22,9 +22,11 @@ export default function App() {
         <BrowserRouter basename="/">
           <Routes>
             <Route path="/" element={<Authenticate />} />
-            <Route path="/home" element={<HomePage />} />
+            <Route path="/lobby" element={<MatchPage />} />
             <Route path="/match" element={<MatchPage />} />
+            <Route path="/home" element={<HomePage />} />
             <Route path="/play" element={<PlayPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
       </ToastProvider>
