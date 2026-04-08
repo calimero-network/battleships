@@ -1,10 +1,11 @@
-import { AbiClient } from '../../../api/AbiClient';
+import { LobbyClient } from '../../../api/lobby/LobbyClient';
+import { GameClient } from '../../../api/game/GameClient';
 import type { MeroJs } from '@calimero-network/mero-react';
 
 import { resolveAppContext } from './context';
 import type { AppContext, ContextRole, ResolveAppContextOptions } from './context';
 
-export { AbiClient };
+export { LobbyClient, GameClient };
 export type { AppContext, ContextRole };
 
 export type ApiResult<T> =
@@ -24,10 +25,10 @@ export interface CreateKvClientOptions {
   applicationId?: string | null;
 }
 
-export async function createKvClient(
+export async function createLobbyClient(
   mero: MeroJs,
   options: CreateKvClientOptions = {},
-): Promise<{ client: AbiClient; context: AppContext }> {
+): Promise<{ client: LobbyClient; context: AppContext }> {
   const resolveOptions: ResolveAppContextOptions = {
     targetContextId: options.contextId,
     contextIdentity: options.contextIdentity,
@@ -38,7 +39,34 @@ export async function createKvClient(
   const context = await resolveAppContext(mero, resolveOptions);
 
   return {
-    client: new AbiClient(mero, context.contextId, context.executorPublicKey),
+    client: new LobbyClient(mero, context.contextId, context.executorPublicKey),
     context,
   };
+}
+
+export async function createGameClient(
+  mero: MeroJs,
+  options: CreateKvClientOptions = {},
+): Promise<{ client: GameClient; context: AppContext }> {
+  const resolveOptions: ResolveAppContextOptions = {
+    targetContextId: options.contextId,
+    contextIdentity: options.contextIdentity,
+    role: options.role,
+    applicationId: options.applicationId,
+  };
+
+  const context = await resolveAppContext(mero, resolveOptions);
+
+  return {
+    client: new GameClient(mero, context.contextId, context.executorPublicKey),
+    context,
+  };
+}
+
+// Backward compat — createKvClient creates a LobbyClient by default
+export async function createKvClient(
+  mero: MeroJs,
+  options: CreateKvClientOptions = {},
+): Promise<{ client: LobbyClient; context: AppContext }> {
+  return createLobbyClient(mero, options);
 }

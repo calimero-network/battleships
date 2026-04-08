@@ -20,7 +20,7 @@ steps:
   - name: Install Battleships App on Node 1
     type: install_application
     node: calimero-node-1
-    path: ../logic/res/battleships-0.2.5.mpk
+    path: ../logic/res/battleships-0.3.0.mpk
     dev: true
     outputs:
       app_id: applicationId
@@ -37,7 +37,7 @@ steps:
     node: calimero-node-1
     application_id: '{{app_id}}'
     group_id: '{{namespace_id}}'
-    params: '{"context_type":"Lobby"}'
+    service_name: lobby
     outputs:
       lobby_ctx_id: contextId
       p1_key: memberPublicKey
@@ -115,7 +115,8 @@ steps:
     node: calimero-node-1
     application_id: '{{app_id}}'
     group_id: '{{namespace_id}}'
-    params: '{"context_type":"Match","player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
+    service_name: game
+    params: '{"player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
     outputs:
       match_ctx_id: contextId
       match_p1_key: memberPublicKey
