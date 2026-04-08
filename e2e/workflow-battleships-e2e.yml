@@ -135,9 +135,20 @@ steps:
       match_id: '{{match_id}}'
       context_id: '{{match_ctx_id}}'
 
-  - name: Wait for Match Context Governance Propagation
+  # The match context's group registration propagates via namespace governance.
+  # Ensure lobby context is synced first (same namespace), then wait for
+  # governance ops to be applied on node-2 before attempting join.
+  - name: Wait for Lobby Sync After Match Creation
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    timeout: 30
+
+  - name: Wait for Namespace Governance Propagation
     type: wait
-    seconds: 5
+    seconds: 10
     message: Waiting for match context group registration to propagate to node 2
 
   - name: Node 2 Joins Match Context
