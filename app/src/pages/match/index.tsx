@@ -943,7 +943,7 @@ export default function MatchPage() {
     const id = await lobby.createLobby(newLobbyName || undefined);
     if (id) {
       setNewLobbyName('');
-      show({ title: 'Lobby created', variant: 'success' });
+      show({ title: 'Namespace created', variant: 'success' });
     } else if (lobby.createLobbyError) {
       show({ title: lobby.createLobbyError.message, variant: 'error' });
     }
@@ -965,12 +965,12 @@ export default function MatchPage() {
     try {
       const success = await lobby.joinLobby(joinInvitationInput);
       if (success) {
-        show({ title: 'Joined lobby', variant: 'success' });
+        show({ title: 'Joined namespace', variant: 'success' });
         setJoinInvitationInput('');
       }
     } catch (e) {
       show({
-        title: e instanceof Error ? e.message : 'Failed to join lobby',
+        title: e instanceof Error ? e.message : 'Failed to join namespace',
         variant: 'error',
       });
     }
@@ -978,7 +978,7 @@ export default function MatchPage() {
 
   const handleEnterLobby = useCallback(() => {
     if (!lobby.lobbyContextId) {
-      show({ title: 'No lobby context available', variant: 'error' });
+      show({ title: 'No namespace context available', variant: 'error' });
       return;
     }
     setView('lobby');
@@ -1049,7 +1049,7 @@ export default function MatchPage() {
                   setPendingShot(null);
                   navigate('/lobby', { replace: true });
                 }}>
-                  Switch Lobby
+                  Switch Namespace
                 </MenuItem>
               )}
               <MenuItem onClick={doLogout}>Logout</MenuItem>
@@ -1087,13 +1087,13 @@ export default function MatchPage() {
           <>
             <Card variant="rounded">
               <CardHeader>
-                <CardTitle>Your Lobbies</CardTitle>
+                <CardTitle>Your Namespaces</CardTitle>
               </CardHeader>
               <CardContent>
                 {lobby.lobbiesLoading ? (
-                  <Text size="sm" color="muted">Loading lobbies...</Text>
+                  <Text size="sm" color="muted">Loading namespaces...</Text>
                 ) : lobby.lobbies.length === 0 ? (
-                  <Text size="sm" color="muted">No lobbies yet. Create one below or join with an invitation.</Text>
+                  <Text size="sm" color="muted">No namespaces yet. Create one below or join with an invitation.</Text>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {lobby.lobbies.map((l) => (
@@ -1137,7 +1137,7 @@ export default function MatchPage() {
 
             <Card variant="rounded">
               <CardHeader>
-                <CardTitle>Create New Lobby</CardTitle>
+                <CardTitle>Create New Namespace</CardTitle>
               </CardHeader>
               <CardContent>
                 <form
@@ -1146,7 +1146,7 @@ export default function MatchPage() {
                 >
                   <Input
                     type="text"
-                    placeholder="Lobby name (optional)"
+                    placeholder="Namespace name (optional)"
                     value={newLobbyName}
                     onChange={(e) => setNewLobbyName(e.target.value)}
                   />
@@ -1159,7 +1159,7 @@ export default function MatchPage() {
 
             <Card variant="rounded">
               <CardHeader>
-                <CardTitle>Join Lobby via Invitation</CardTitle>
+                <CardTitle>Join Namespace via Invitation</CardTitle>
               </CardHeader>
               <CardContent>
                 <form
@@ -1172,7 +1172,7 @@ export default function MatchPage() {
                     value={joinInvitationInput}
                     onChange={(e) => setJoinInvitationInput(e.target.value)}
                   />
-                  <Button type="submit" variant="primary">Join Lobby</Button>
+                  <Button type="submit" variant="primary">Join Namespace</Button>
                 </form>
               </CardContent>
             </Card>
@@ -1180,15 +1180,29 @@ export default function MatchPage() {
             {lobby.selectedLobby && (
               <Card variant="rounded">
                 <CardHeader>
-                  <CardTitle>Enter Lobby</CardTitle>
+                  <CardTitle>Enter Namespace</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {lobby.groupLoading ? (
-                    <Text size="sm" color="muted">Resolving lobby context...</Text>
+                    <Text size="sm" color="muted">Resolving namespace context...</Text>
                   ) : lobby.lobbyContextId ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {lobby.namespaceId && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Text size="sm" color="muted">Namespace:</Text>
+                          <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                            {lobby.namespaceId.slice(0, 8)}...{lobby.namespaceId.slice(-8)}
+                          </Text>
+                          <CopyToClipboard
+                            text={lobby.namespaceId}
+                            variant="icon"
+                            size="small"
+                            successMessage="Namespace ID copied!"
+                          />
+                        </div>
+                      )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Text size="sm" color="muted">Lobby Context:</Text>
+                        <Text size="sm" color="muted">Context:</Text>
                         <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
                           {lobby.lobbyContextId.slice(0, 8)}...{lobby.lobbyContextId.slice(-8)}
                         </Text>
@@ -1196,23 +1210,23 @@ export default function MatchPage() {
                           text={lobby.lobbyContextId}
                           variant="icon"
                           size="small"
-                          successMessage="Lobby context ID copied!"
+                          successMessage="Context ID copied!"
                         />
                       </div>
                       {lobby.lobbyJoined ? (
                         <Button variant="success" onClick={() => setView('lobby')}>
-                          Enter Lobby
+                          Enter
                         </Button>
                       ) : (
                         <Button variant="primary" onClick={handleEnterLobby} disabled={lobby.joinLoading}>
-                          {lobby.joinLoading ? 'Joining...' : 'Join & Enter Lobby'}
+                          {lobby.joinLoading ? 'Joining...' : 'Join & Enter'}
                         </Button>
                       )}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       <Text size="sm" color="muted">
-                        Select a lobby above to enter.
+                        Select a namespace above to enter.
                       </Text>
                     </div>
                   )}
