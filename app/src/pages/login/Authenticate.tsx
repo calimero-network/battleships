@@ -65,40 +65,13 @@ export default function Authenticate() {
               }}
             >
               <div style={{ width: '100%', maxWidth: '800px' }}>
-                <Card
-                  variant="rounded"
-                  style={{
-                    background:
-                      'linear-gradient(135deg, #1f2937 0%, #374151 100%)',
-                    border: '1px solid #4b5563',
-                    boxShadow:
-                      '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                  }}
-                >
-                  <CardHeader
-                    style={{
-                      background:
-                        'linear-gradient(135deg, #374151 0%, #4b5563 100%)',
-                      borderBottom: '1px solid #6b7280',
-                      padding: '1.5rem',
-                    }}
-                  >
-                    <CardTitle
-                      style={{
-                        fontSize: '1.5rem',
-                        fontWeight: '700',
-                        background:
-                          'linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        textAlign: 'center',
-                        margin: 0,
-                      }}
-                    >
+                <Card variant="rounded">
+                  <CardHeader>
+                    <CardTitle>
                       {translations.auth.description.subtitle}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent style={{ padding: '1.5rem' }}>
+                  <CardContent>
                     <div style={{ marginBottom: '1.5rem' }}>
                       <div
                         style={{
@@ -216,28 +189,6 @@ export default function Authenticate() {
                             'noopener,noreferrer',
                           )
                         }
-                        style={{
-                          minWidth: '140px',
-                          minHeight: '2.5rem',
-                          background:
-                            'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontWeight: '600',
-                          fontSize: '0.9rem',
-                          boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
-                          transition: 'all 0.2s ease-in-out',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow =
-                            '0 6px 12px -3px rgba(59, 130, 246, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow =
-                            '0 4px 6px -1px rgba(59, 130, 246, 0.3)';
-                        }}
                       >
                         📚 {translations.home.documentation}
                       </Button>
@@ -250,28 +201,6 @@ export default function Authenticate() {
                             'noopener,noreferrer',
                           )
                         }
-                        style={{
-                          minWidth: '140px',
-                          minHeight: '2.5rem',
-                          background:
-                            'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontWeight: '600',
-                          fontSize: '0.9rem',
-                          boxShadow: '0 4px 6px -1px rgba(107, 114, 128, 0.3)',
-                          transition: 'all 0.2s ease-in-out',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow =
-                            '0 6px 12px -3px rgba(107, 114, 128, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow =
-                            '0 4px 6px -1px rgba(107, 114, 128, 0.3)';
-                        }}
                       >
                         🐙 {translations.home.github}
                       </Button>
@@ -284,28 +213,6 @@ export default function Authenticate() {
                             'noopener,noreferrer',
                           )
                         }
-                        style={{
-                          minWidth: '140px',
-                          minHeight: '2.5rem',
-                          background:
-                            'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontWeight: '600',
-                          fontSize: '0.9rem',
-                          boxShadow: '0 4px 6px -1px rgba(6, 182, 212, 0.3)',
-                          transition: 'all 0.2s ease-in-out',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'translateY(-1px)';
-                          e.currentTarget.style.boxShadow =
-                            '0 6px 12px -3px rgba(6, 182, 212, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'translateY(0)';
-                          e.currentTarget.style.boxShadow =
-                            '0 4px 6px -1px rgba(6, 182, 212, 0.3)';
-                        }}
                       >
                         🌐 {translations.home.website}
                       </Button>
