@@ -1,0 +1,395 @@
+name: Battleships E2E — Namespace + Lobby + Match + Gameplay
+description: >
+  Full end-to-end test of the battleships app using the namespace model.
+  Two nodes: node-1 creates a namespace, lobby context, and match;
+  node-2 joins via namespace invitation. Both players place ships,
+  exchange shots, and verify state sync across nodes.
+
+force_pull_image: true
+
+nodes:
+  count: 2
+  image: ghcr.io/calimero-network/merod:edge
+  prefix: calimero-node
+
+steps:
+  # ============================================================
+  # Phase A: Bootstrap — Install, Namespace, Lobby
+  # ============================================================
+
+  - name: Install Battleships App on Node 1
+    type: install_application
+    node: calimero-node-1
+    path: /Users/beast/Developer/Calimero/battleships/logic/res/battleships-0.2.5.mpk
+    dev: true
+    outputs:
+      app_id: applicationId
+
+  - name: Create Namespace on Node 1
+    type: create_namespace
+    node: calimero-node-1
+    application_id: '{{app_id}}'
+    outputs:
+      namespace_id: namespaceId
+
+  - name: Create Lobby Context in Namespace
+    type: create_context
+    node: calimero-node-1
+    application_id: '{{app_id}}'
+    group_id: '{{namespace_id}}'
+    params: '{"context_type":"Lobby"}'
+    outputs:
+      lobby_ctx_id: contextId
+      p1_key: memberPublicKey
+
+  - name: Assert Lobby Context Created
+    type: assert
+    statements:
+      - 'is_set({{lobby_ctx_id}})'
+      - 'is_set({{p1_key}})'
+
+  - name: Create Namespace Invitation
+    type: create_namespace_invitation
+    node: calimero-node-1
+    namespace_id: '{{namespace_id}}'
+    outputs:
+      invitation: invitation
+
+  - name: Wait for Namespace Gossip Propagation
+    type: wait
+    seconds: 5
+    message: Waiting for namespace gossip to reach node 2
+
+  - name: Node 2 Joins Namespace
+    type: join_namespace
+    node: calimero-node-2
+    namespace_id: '{{namespace_id}}'
+    invitation: '{{invitation}}'
+    outputs:
+      p2_identity: memberIdentity
+
+  - name: Node 2 Joins Lobby Context
+    type: join_context
+    node: calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    outputs:
+      lobby_ctx_id_node2: contextId
+      p2_key: memberPublicKey
+
+  - name: Assert Node 2 Joined
+    type: assert
+    statements:
+      - 'is_set({{p2_key}})'
+      - 'is_set({{p2_identity}})'
+
+  - name: Wait for Lobby Sync
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    timeout: 30
+
+  # ============================================================
+  # Phase B: Match Creation
+  # ============================================================
+
+  - name: Node 1 Creates Match in Lobby
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: create_match
+    executor_public_key: '{{p1_key}}'
+    args:
+      player2: '{{p2_key}}'
+    outputs:
+      match_id: result.output
+
+  - name: Assert Match ID Allocated
+    type: assert
+    statements:
+      - 'is_set({{match_id}})'
+
+  - name: Create Match Context in Namespace
+    type: create_context
+    node: calimero-node-1
+    application_id: '{{app_id}}'
+    group_id: '{{namespace_id}}'
+    params: '{"context_type":"Match","player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
+    outputs:
+      match_ctx_id: contextId
+      match_p1_key: memberPublicKey
+
+  - name: Assert Match Context Created
+    type: assert
+    statements:
+      - 'is_set({{match_ctx_id}})'
+
+  - name: Link Match Context to Lobby
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: set_match_context_id
+    executor_public_key: '{{p1_key}}'
+    args:
+      match_id: '{{match_id}}'
+      context_id: '{{match_ctx_id}}'
+
+  - name: Wait for Match Context Governance Propagation
+    type: wait
+    seconds: 5
+    message: Waiting for match context group registration to propagate to node 2
+
+  - name: Node 2 Joins Match Context
+    type: join_context
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    outputs:
+      match_ctx_id_node2: contextId
+      match_p2_key: memberPublicKey
+
+  - name: Wait for Match Context Sync
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # ============================================================
+  # Phase C: Gameplay — Ship Placement
+  # ============================================================
+
+  - name: Wait for Match Init State to Settle
+    type: wait
+    seconds: 3
+    message: Waiting for match context init state to settle
+
+  # The match context generates its own match_id during init (different from the lobby's).
+  - name: Get Active Match ID from Match Context
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: get_active_match_id
+    executor_public_key: '{{match_p1_key}}'
+    args: {}
+    outputs:
+      game_match_id: result.output
+
+  - name: Assert Game Match ID
+    type: assert
+    statements:
+      - 'is_set({{game_match_id}})'
+
+  # Player 1 fleet: 1x2, 2x3, 1x4, 1x5 — spread on rows 0,2,4,6,8
+  # Ships cannot touch (including diagonals)
+  - name: Player 1 Places Ships
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: place_ships
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+      ships:
+        - '0,0;1,0'
+        - '0,2;1,2;2,2'
+        - '0,4;1,4;2,4'
+        - '0,6;1,6;2,6;3,6'
+        - '0,8;1,8;2,8;3,8;4,8'
+
+  - name: Wait for Ship Placement Sync (P1)
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # Player 2 fleet: same pattern but on the right side of the board
+  - name: Player 2 Places Ships
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: place_ships
+    executor_public_key: '{{match_p2_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+      ships:
+        - '8,0;9,0'
+        - '7,2;8,2;9,2'
+        - '7,4;8,4;9,4'
+        - '6,6;7,6;8,6;9,6'
+        - '5,8;6,8;7,8;8,8;9,8'
+
+  - name: Wait for Ship Placement Sync (P2)
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # Verify board state after placement
+  - name: Player 1 Checks Own Board
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: get_own_board
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+    outputs:
+      p1_board: result.output
+
+  - name: Assert P1 Board Has Ships
+    type: assert
+    statements:
+      - 'is_set({{p1_board}})'
+
+  # ============================================================
+  # Phase D: Gameplay — Shooting Round 1
+  # ============================================================
+
+  # Player 1's turn — shoot at P2's ship at (8,0)
+  - name: Player 1 Proposes Shot at (8,0)
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+      x: 8
+      y: 0
+
+  - name: Wait for Shot Sync (P1 shot)
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Player 2 Acknowledges Shot
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: acknowledge_shot
+    executor_public_key: '{{match_p2_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+    outputs:
+      shot1_result: result.output
+
+  - name: Wait for Ack Sync (P2 ack)
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # Verify P1's shots board shows the hit
+  - name: Player 1 Checks Shots Board
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: get_shots
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+    outputs:
+      p1_shots: result.output
+
+  - name: Assert P1 Shots Recorded
+    type: assert
+    statements:
+      - 'is_set({{p1_shots}})'
+
+  # Player 2's turn — shoot at P1's ship at (0,0)
+  - name: Player 2 Proposes Shot at (0,0)
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+      x: 0
+      y: 0
+
+  - name: Wait for Shot Sync (P2 shot)
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Player 1 Acknowledges Shot
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: acknowledge_shot
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+    outputs:
+      shot2_result: result.output
+
+  - name: Wait for Ack Sync (P1 ack)
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # ============================================================
+  # Phase E: Final Verification
+  # ============================================================
+
+  - name: Verify Turn Tracking on Node 1
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: get_current_turn
+    executor_public_key: '{{match_p1_key}}'
+    outputs:
+      current_turn: result.output
+
+  - name: Assert Turn Is Tracked
+    type: assert
+    statements:
+      - 'is_set({{current_turn}})'
+
+  - name: Verify Match List on Node 1 (Lobby)
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: get_matches
+    executor_public_key: '{{p1_key}}'
+    outputs:
+      matches_n1: result.output
+
+  - name: Assert Matches Exist on Node 1
+    type: assert
+    statements:
+      - 'is_set({{matches_n1}})'
+
+  - name: Verify Match List on Node 2 (Lobby)
+    type: call
+    node: calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    method: get_matches
+    executor_public_key: '{{p2_key}}'
+    outputs:
+      matches_n2: result.output
+
+  - name: Assert Matches Exist on Node 2
+    type: assert
+    statements:
+      - 'is_set({{matches_n2}})'
+
+stop_all_nodes: false
