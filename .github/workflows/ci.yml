@@ -124,7 +124,7 @@ jobs:
 
       - name: Install merobox
         run: |
-          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@c5074cad5a1c7cb3fe64bb9cd396d9c7dc5dc694"
+          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@master"
           merobox --version
 
       - name: Run Battleships E2E Workflow
