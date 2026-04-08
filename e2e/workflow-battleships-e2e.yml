@@ -20,7 +20,7 @@ steps:
   - name: Install Battleships App on Node 1
     type: install_application
     node: calimero-node-1
-    path: /Users/beast/Developer/Calimero/battleships/logic/res/battleships-0.2.5.mpk
+    path: ../logic/res/battleships-0.2.5.mpk
     dev: true
     outputs:
       app_id: applicationId
