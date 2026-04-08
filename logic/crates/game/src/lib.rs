@@ -288,3 +288,38 @@ impl GameState {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn game_state_stores_lobby_context_id() {
+        let state = GameState {
+            lobby_context_id: Some("lobby-ctx-abc".into()),
+            active_match: None,
+        };
+        assert_eq!(state.lobby_context_id.as_deref(), Some("lobby-ctx-abc"));
+    }
+
+    #[test]
+    fn winner_detection_sets_winner_on_match() {
+        let pk1 = PublicKey([1u8; 32]);
+        let pk2 = PublicKey([2u8; 32]);
+        let mut m = Match::new("test-match".into(), pk1.clone(), pk2.clone());
+        assert!(!m.is_finished());
+        assert!(m.winner.is_none());
+        m.set_winner(pk1.clone());
+        assert!(m.is_finished());
+        assert_eq!(m.winner.as_ref(), Some(&pk1));
+    }
+
+    #[test]
+    fn match_get_opponent_returns_other_player() {
+        let pk1 = PublicKey([1u8; 32]);
+        let pk2 = PublicKey([2u8; 32]);
+        let m = Match::new("test-match".into(), pk1.clone(), pk2.clone());
+        assert_eq!(m.get_opponent(&pk1), pk2);
+        assert_eq!(m.get_opponent(&pk2), pk1);
+    }
+}
