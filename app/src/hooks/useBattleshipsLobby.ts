@@ -3,10 +3,9 @@ import {
   useContexts,
   useCreateContext,
   useContextGroup,
-  useInviteToContext,
-  useJoinContext,
   useGroupMembers,
-  useJoinGroupContext,
+  useCreateNamespaceInvitation,
+  useJoinNamespace,
   useMero,
 } from '@calimero-network/mero-react';
 import type { GroupMember } from '@calimero-network/mero-react';
@@ -51,29 +50,6 @@ export interface UseBattleshipsLobbyReturn {
   joinLoading: boolean;
 
   refetchContexts: () => Promise<void>;
-}
-
-interface ShouldAutoJoinGroupContextOptions {
-  groupId: string | null;
-  lobbyContextId: string | null;
-  lobbyJoined: boolean;
-  autoJoinAttempted: boolean;
-  joinGroupContextLoading: boolean;
-  lastJoinContextId: string | null;
-}
-
-export function shouldAutoJoinGroupContext({
-  groupId,
-  lobbyContextId,
-  lobbyJoined,
-  autoJoinAttempted,
-  joinGroupContextLoading,
-  lastJoinContextId,
-}: ShouldAutoJoinGroupContextOptions): boolean {
-  if (!groupId || !lobbyContextId) return false;
-  if (lobbyJoined || autoJoinAttempted || joinGroupContextLoading) return false;
-  if (lastJoinContextId === lobbyContextId) return false;
-  return true;
 }
 
 function loadSelectedLobbyId(): string | null {
@@ -128,19 +104,12 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     loading: membersLoading,
   } = useGroupMembers(groupId);
 
-  const {
-    joinGroupContext,
-    loading: joinGroupContextLoading,
-  } = useJoinGroupContext();
-
   const { createContext, loading: createContextLoading, error: createContextError } = useCreateContext();
-  const { inviteToContext, loading: inviteLoading } = useInviteToContext();
-  const { joinContext, loading: joinContextLoading } = useJoinContext();
+  const { createNamespaceInvitation, loading: inviteLoading } = useCreateNamespaceInvitation();
+  const { joinNamespace, loading: joinNamespaceLoading } = useJoinNamespace();
 
   const [lobbyJoined, setLobbyJoined] = useState(false);
   const [executorPublicKey, setExecutorPublicKey] = useState<string | null>(null);
-  const autoJoinAttempted = useRef(false);
-  const lastJoinContextId = useRef<string | null>(null);
 
   // Auto-select: pick persisted lobby if valid, or fall back to first lobby
   // Skip if user explicitly cleared the selection (Switch Lobby)
@@ -167,7 +136,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   useEffect(() => {
     setLobbyJoined(false);
     setExecutorPublicKey(null);
-    autoJoinAttempted.current = false;
   }, [selectedLobbyId]);
 
   useEffect(() => {
@@ -203,37 +171,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       setLobbyJoined(true);
     }
   }, [lobbyContextId, executorPublicKey, lobbyJoined]);
-
-  useEffect(() => {
-    if (
-      !shouldAutoJoinGroupContext({
-        groupId,
-        lobbyContextId,
-        lobbyJoined,
-        autoJoinAttempted: autoJoinAttempted.current,
-        joinGroupContextLoading,
-        lastJoinContextId: lastJoinContextId.current,
-      })
-    ) {
-      return;
-    }
-    autoJoinAttempted.current = true;
-
-    (async () => {
-      try {
-        const result = await joinGroupContext(groupId, lobbyContextId);
-        if (result) {
-          setLobbyJoined(true);
-          if (result.memberPublicKey) setExecutorPublicKey(result.memberPublicKey);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : '';
-        if (message.includes('already')) {
-          setLobbyJoined(true);
-        }
-      }
-    })();
-  }, [groupId, lobbyContextId, lobbyJoined, joinGroupContextLoading, joinGroupContext]);
 
   const isAdmin = selfIdentity !== null
     && members.some((m) => m.identity === selfIdentity && m.role === 'Admin');
@@ -280,36 +217,44 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     return null;
   }, [applicationId, createContext, refetchContexts]);
 
-  const invitePlayer = useCallback(async (validForSeconds = 86400) => {
-    if (!lobbyContextId || !executorPublicKey) return null;
-    return inviteToContext({
-      contextId: lobbyContextId,
-      inviterId: executorPublicKey,
-      validForSeconds,
-    });
-  }, [lobbyContextId, executorPublicKey, inviteToContext]);
+  const invitePlayer = useCallback(async (_validForSeconds = 86400) => {
+    // TODO(Phase 1): Wire namespaceId from namespace-first lobby flow
+    // For now, use groupId as the namespace (root group) if available
+    if (!groupId) return null;
+    return createNamespaceInvitation(groupId, { recursive: true });
+  }, [groupId, createNamespaceInvitation]);
 
   const joinLobbyViaInvitation = useCallback(async (invitationJson: string): Promise<boolean> => {
     if (!mero) return false;
     try {
       const parsed = JSON.parse(invitationJson);
 
-      // Use existing context identity or generate a new one
-      let memberPk = contextIdentity;
-      if (!memberPk) {
-        const generated = await mero.admin.generateContextIdentity();
-        memberPk = generated.publicKey;
+      // Support both single invitation and recursive invitation formats.
+      // Recursive: { invitations: [{ groupId, invitation }, ...] }
+      // Single:    { invitation: { groupId: number[], ... }, inviterSignature }
+      let namespaceId: string | null = null;
+      let invitation = parsed;
+
+      if (Array.isArray(parsed?.invitations) && parsed.invitations.length > 0) {
+        // Recursive invitation — first entry is the namespace root
+        const first = parsed.invitations[0];
+        namespaceId = first.groupId;
+        invitation = first.invitation;
+      } else if (parsed?.invitation?.groupId) {
+        // Single invitation — groupId is a byte array, convert to hex
+        const gid = parsed.invitation.groupId;
+        namespaceId = Array.isArray(gid)
+          ? gid.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+          : String(gid);
       }
 
-      const result = await joinContext({
-        invitation: parsed,
-        newMemberPublicKey: memberPk,
-      });
+      if (!namespaceId) {
+        throw new Error('Invalid invitation: cannot determine namespace ID');
+      }
+
+      const result = await joinNamespace(namespaceId, { invitation });
 
       if (result) {
-        lastJoinContextId.current = result.contextId;
-        setSelectedLobbyId(result.contextId);
-        persistSelectedLobbyId(result.contextId);
         await refetchContexts();
         return true;
       }
@@ -319,7 +264,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       if (message.includes('already')) return true;
       throw err;
     }
-  }, [mero, contextIdentity, joinContext, refetchContexts]);
+  }, [mero, joinNamespace, refetchContexts]);
 
   return {
     lobbies,
@@ -350,7 +295,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     inviteLoading,
 
     joinLobby: joinLobbyViaInvitation,
-    joinLoading: joinContextLoading,
+    joinLoading: joinNamespaceLoading,
 
     refetchContexts,
   };

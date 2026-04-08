@@ -340,7 +340,7 @@ export default function MatchPage() {
 
         if (missingContextLocally && lobby.groupId) {
           try {
-            await mero.admin.joinGroupContext(lobby.groupId, matchContextId);
+            await mero.admin.joinContext(matchContextId);
             const { client } = await createKvClient(mero, {
               contextId: matchContextId,
               contextIdentity: executorKey,
@@ -353,7 +353,7 @@ export default function MatchPage() {
             }
             return;
           } catch (joinErr) {
-            console.error('joinGroupContext fallback failed:', joinErr);
+            console.error('joinContext fallback failed:', joinErr);
           }
         } else {
           console.error(e);
