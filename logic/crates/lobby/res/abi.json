@@ -1,0 +1,311 @@
+{
+  "schema_version": "wasm-abi/1",
+  "types": {
+    "Event_MatchCreated": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "LobbyState": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id_nonce",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "created_ms",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "matches",
+          "type": {
+            "kind": "list",
+            "items": {
+              "$ref": "MatchSummary"
+            }
+          }
+        },
+        {
+          "name": "player_stats",
+          "type": {
+            "kind": "list",
+            "items": {
+              "$ref": "PlayerStatsEntry"
+            }
+          }
+        },
+        {
+          "name": "history",
+          "type": {
+            "kind": "list",
+            "items": {
+              "$ref": "MatchRecord"
+            }
+          }
+        }
+      ]
+    },
+    "MatchRecord": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "winner",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "loser",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "finished_ms",
+          "type": {
+            "kind": "u64"
+          }
+        }
+      ]
+    },
+    "MatchStatus": {
+      "kind": "variant",
+      "variants": [
+        {
+          "name": "Pending"
+        },
+        {
+          "name": "Active"
+        },
+        {
+          "name": "Finished"
+        }
+      ]
+    },
+    "MatchSummary": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player1",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player2",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "status",
+          "type": {
+            "$ref": "MatchStatus"
+          }
+        },
+        {
+          "name": "context_id",
+          "type": {
+            "kind": "string"
+          },
+          "nullable": true
+        },
+        {
+          "name": "winner",
+          "type": {
+            "kind": "string"
+          },
+          "nullable": true
+        }
+      ]
+    },
+    "PlayerStats": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "matches_played",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "wins",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "losses",
+          "type": {
+            "kind": "u64"
+          }
+        }
+      ]
+    },
+    "PlayerStatsEntry": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "stats",
+          "type": {
+            "$ref": "PlayerStats"
+          }
+        }
+      ]
+    }
+  },
+  "methods": [
+    {
+      "name": "new",
+      "params": [],
+      "returns": {
+        "$ref": "PlayerStats"
+      }
+    },
+    {
+      "name": "init",
+      "params": [],
+      "returns": {
+        "kind": "unit"
+      }
+    },
+    {
+      "name": "create_match",
+      "params": [
+        {
+          "name": "player2",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "string"
+      }
+    },
+    {
+      "name": "set_match_context_id",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "context_id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      }
+    },
+    {
+      "name": "get_matches",
+      "params": [],
+      "returns": {
+        "kind": "list",
+        "items": {
+          "$ref": "MatchSummary"
+        }
+      }
+    },
+    {
+      "name": "get_player_stats",
+      "params": [
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "$ref": "PlayerStats"
+      }
+    },
+    {
+      "name": "get_history",
+      "params": [],
+      "returns": {
+        "kind": "list",
+        "items": {
+          "$ref": "MatchRecord"
+        }
+      }
+    },
+    {
+      "name": "on_match_finished",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "winner",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "loser",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      }
+    }
+  ],
+  "events": [
+    {
+      "name": "MatchCreated",
+      "payload": {
+        "$ref": "Event_MatchCreated"
+      }
+    },
+    {
+      "name": "MatchListUpdated"
+    },
+    {
+      "name": "PlayerStatsUpdated"
+    }
+  ],
+  "state_root": "LobbyState"
+}
