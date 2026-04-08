@@ -90,7 +90,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             logic/target
-          key: logic-${{ runner.os }}-${{ hashFiles('logic/Cargo.lock') }}
+          key: logic-${{ runner.os }}-${{ hashFiles('logic/Cargo.toml') }}
           restore-keys: logic-${{ runner.os }}-
 
       - name: Cargo format
@@ -124,7 +124,7 @@ jobs:
 
       - name: Install merobox
         run: |
-          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@feat/namespace-governance-rewrite"
+          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@c5074cad5a1c7cb3fe64bb9cd396d9c7dc5dc694"
           merobox --version
 
       - name: Run Battleships E2E Workflow
