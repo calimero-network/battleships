@@ -43,7 +43,9 @@ pub use validation::{
 };
 
 /// Whether this context is a Lobby (match directory) or a Match (live game).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
+)]
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
 pub enum ContextType {
@@ -133,7 +135,9 @@ impl BattleshipState {
             state.lobby_context_id = lobby_context_id;
 
             if let (Some(p1), Some(p2)) = (player1, player2) {
-                if let (Ok(pk1), Ok(pk2)) = (PublicKey::from_base58(&p1), PublicKey::from_base58(&p2)) {
+                if let (Ok(pk1), Ok(pk2)) =
+                    (PublicKey::from_base58(&p1), PublicKey::from_base58(&p2))
+                {
                     let id = format!("match-{}-1", env::time_now());
                     state.id_nonce = 1;
                     state.active_match = Some(Match::new(id, pk1, pk2));
@@ -621,10 +625,7 @@ mod tests {
         summary.status = MatchStatus::Active;
 
         assert_eq!(state.matches[0].status, MatchStatus::Active);
-        assert_eq!(
-            state.matches[0].context_id.as_deref(),
-            Some("ctx-abc")
-        );
+        assert_eq!(state.matches[0].context_id.as_deref(), Some("ctx-abc"));
     }
 
     #[test]
@@ -682,7 +683,11 @@ mod tests {
         let mut state = make_state(ContextType::Lobby);
         state.player_stats.push(PlayerStatsEntry {
             player: "bob".into(),
-            stats: PlayerStats { matches_played: 5, wins: 3, losses: 2 },
+            stats: PlayerStats {
+                matches_played: 5,
+                wins: 3,
+                losses: 2,
+            },
         });
 
         let stats = state.find_or_create_stats("bob");
@@ -815,11 +820,19 @@ mod tests {
         assert_eq!(state.matches[0].winner.as_deref(), Some("alice"));
         assert_eq!(state.player_stats.len(), 2);
 
-        let alice_stats = state.player_stats.iter().find(|e| e.player == "alice").unwrap();
+        let alice_stats = state
+            .player_stats
+            .iter()
+            .find(|e| e.player == "alice")
+            .unwrap();
         assert_eq!(alice_stats.stats.wins, 1);
         assert_eq!(alice_stats.stats.losses, 0);
 
-        let bob_stats = state.player_stats.iter().find(|e| e.player == "bob").unwrap();
+        let bob_stats = state
+            .player_stats
+            .iter()
+            .find(|e| e.player == "bob")
+            .unwrap();
         assert_eq!(bob_stats.stats.wins, 0);
         assert_eq!(bob_stats.stats.losses, 1);
 
@@ -832,7 +845,11 @@ mod tests {
     fn on_match_finished_ignores_unknown_match_id() {
         let mut state = make_state(ContextType::Lobby);
 
-        if let Some(summary) = state.matches.iter_mut().find(|m| m.match_id == "nonexistent") {
+        if let Some(summary) = state
+            .matches
+            .iter_mut()
+            .find(|m| m.match_id == "nonexistent")
+        {
             summary.status = MatchStatus::Finished;
         }
 
@@ -883,7 +900,11 @@ mod tests {
                 winner: None,
             });
 
-            let summary = state.matches.iter_mut().find(|m| m.match_id == mid).unwrap();
+            let summary = state
+                .matches
+                .iter_mut()
+                .find(|m| m.match_id == mid)
+                .unwrap();
             summary.status = MatchStatus::Finished;
             summary.winner = Some("alice".into());
 
@@ -906,11 +927,19 @@ mod tests {
             });
         }
 
-        let alice = state.player_stats.iter().find(|e| e.player == "alice").unwrap();
+        let alice = state
+            .player_stats
+            .iter()
+            .find(|e| e.player == "alice")
+            .unwrap();
         assert_eq!(alice.stats.wins, 3);
         assert_eq!(alice.stats.matches_played, 3);
 
-        let bob = state.player_stats.iter().find(|e| e.player == "bob").unwrap();
+        let bob = state
+            .player_stats
+            .iter()
+            .find(|e| e.player == "bob")
+            .unwrap();
         assert_eq!(bob.stats.losses, 3);
         assert_eq!(bob.stats.matches_played, 3);
 

@@ -6,7 +6,14 @@ use calimero_wasm_abi::emitter::emit_manifest_from_crate;
 fn main() {
     let src_dir = Path::new("src");
 
-    let module_files = ["lib.rs", "lobby.rs", "events.rs", "game.rs", "players.rs", "board.rs"];
+    let module_files = [
+        "lib.rs",
+        "lobby.rs",
+        "events.rs",
+        "game.rs",
+        "players.rs",
+        "board.rs",
+    ];
 
     for name in &module_files {
         println!("cargo:rerun-if-changed=src/{}", name);

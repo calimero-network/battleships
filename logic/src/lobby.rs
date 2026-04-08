@@ -42,6 +42,12 @@ pub struct PlayerStats {
     pub losses: u64,
 }
 
+impl Default for PlayerStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlayerStats {
     pub fn new() -> Self {
         PlayerStats {
@@ -119,7 +125,11 @@ mod tests {
 
     #[test]
     fn match_status_borsh_roundtrip() {
-        for status in [MatchStatus::Pending, MatchStatus::Active, MatchStatus::Finished] {
+        for status in [
+            MatchStatus::Pending,
+            MatchStatus::Active,
+            MatchStatus::Finished,
+        ] {
             let bytes = borsh::to_vec(&status).unwrap();
             let decoded: MatchStatus = borsh::from_slice(&bytes).unwrap();
             assert_eq!(decoded, status);
