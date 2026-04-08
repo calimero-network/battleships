@@ -412,14 +412,25 @@ export default function MatchPage() {
   }, [matchApi, view]);
 
   const createMatch = useCallback(async () => {
-    if (!lobbyApi || !mero || !currentContext) return;
+    if (!lobbyApi || !mero || !currentContext || !lobby.namespaceId) return;
     setCreatingMatch(true);
     try {
       // 1. Create a pending match in the Lobby contract
       const id = await lobbyApi.createMatch({ player2 });
       show({ title: `Match allocated: ${id}`, variant: 'success' });
 
-      // 2. Create the Match context via admin API
+      // 2. Create a match subgroup inside the namespace (restricted to the two players)
+      const { groupId: matchSubgroupId } = await mero.admin.createGroupInNamespace(
+        lobby.namespaceId,
+        { alias: `match-${id}` },
+      );
+
+      // 3. Add player2 to the match subgroup
+      await mero.admin.addGroupMembers(matchSubgroupId, {
+        members: [{ identity: player2, role: 'Member' }],
+      });
+
+      // 4. Create the Match context inside the subgroup
       const executorKey = lobby.executorPublicKey ?? contextIdentity;
       const initParams = JSON.stringify({
         context_type: 'Match',
@@ -432,16 +443,16 @@ export default function MatchPage() {
       const { contextId: newContextId } = await mero.admin.createContext({
         applicationId: currentContext.applicationId,
         initializationParams: initBytes,
-        groupId: lobby.groupId || undefined,
+        groupId: matchSubgroupId,
       });
 
-      // 3. Link the Match context back into the Lobby
+      // 5. Link the Match context back into the Lobby
       await lobbyApi.setMatchContextId({
         match_id: id,
         context_id: newContextId,
       });
 
-      // 4. Refresh the match list
+      // 6. Refresh the match list
       try {
         const summaries = await lobbyApi.getMatches();
         setMyMatches(summaries);
@@ -449,7 +460,7 @@ export default function MatchPage() {
         // non-critical
       }
 
-      // 5. Navigate to the match with both identifiers
+      // 7. Navigate to the match with both identifiers
       setMatchId(id);
       setRuntimeMatchId(null);
       setMatchContextId(newContextId);
@@ -465,7 +476,7 @@ export default function MatchPage() {
     } finally {
       setCreatingMatch(false);
     }
-  }, [lobbyApi, mero, currentContext, player2, lobby.executorPublicKey, lobby.groupId, contextIdentity, show, navigate]);
+  }, [lobbyApi, mero, currentContext, player2, lobby.executorPublicKey, lobby.namespaceId, contextIdentity, show, navigate]);
 
   const openGame = useCallback(
     (id: string, contextId: string) => {
