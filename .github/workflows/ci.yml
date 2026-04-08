@@ -124,7 +124,7 @@ jobs:
 
       - name: Install merobox
         run: |
-          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@fix/resolve-context-params-placeholders"
+          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@master"
           pip install --force-reinstall --no-deps "calimero-client-py @ git+https://github.com/calimero-network/calimero-client-py.git@master"
           merobox --version
 
