@@ -1,0 +1,17 @@
+[package]
+name = "battleships-game"
+version = "0.3.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+battleships-types = { workspace = true }
+calimero-sdk = { workspace = true }
+calimero-storage = { workspace = true }
+bs58 = { workspace = true }
+
+[build-dependencies]
+calimero-wasm-abi = { workspace = true }
+serde_json = { workspace = true }
