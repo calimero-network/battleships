@@ -112,7 +112,7 @@ impl Ship {
         }
 
         let length = coordinates.len() as u8;
-        if length < 2 || length > 5 {
+        if !(2..=5).contains(&length) {
             return Err(GameError::Invalid("ship length must be 2-5"));
         }
 

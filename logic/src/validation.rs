@@ -159,6 +159,12 @@ pub struct ValidationInput {
     pub ships: Option<Vec<Vec<Coordinate>>>,
 }
 
+impl Default for ValidationInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValidationInput {
     pub fn new() -> Self {
         ValidationInput {
@@ -214,10 +220,9 @@ pub struct BoundsValidationStrategy;
 
 impl ValidationStrategy for BoundsValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let coordinates = input
-            .coordinates
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("coordinates required for bounds validation"))?;
+        let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
+            "coordinates required for bounds validation",
+        ))?;
         let size = input.size.unwrap_or(BOARD_SIZE);
 
         for coord in coordinates {
@@ -241,10 +246,9 @@ pub struct UniquenessValidationStrategy;
 
 impl ValidationStrategy for UniquenessValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let coordinates = input
-            .coordinates
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("coordinates required for uniqueness validation"))?;
+        let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
+            "coordinates required for uniqueness validation",
+        ))?;
 
         let mut set = std::collections::BTreeSet::new();
         for &coord in coordinates {
@@ -268,11 +272,10 @@ impl ValidationStrategy for OverlapValidationStrategy {
         let board = input
             .board
             .as_ref()
-            .ok_or_else(|| GameError::Invalid("board required for overlap validation"))?;
-        let coordinates = input
-            .coordinates
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("coordinates required for overlap validation"))?;
+            .ok_or(GameError::Invalid("board required for overlap validation"))?;
+        let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
+            "coordinates required for overlap validation",
+        ))?;
         let size = input.size.unwrap_or(BOARD_SIZE);
 
         for &coord in coordinates {
@@ -293,14 +296,12 @@ pub struct AdjacencyValidationStrategy;
 
 impl ValidationStrategy for AdjacencyValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let board = input
-            .board
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("board required for adjacency validation"))?;
-        let coordinates = input
-            .coordinates
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("coordinates required for adjacency validation"))?;
+        let board = input.board.as_ref().ok_or(GameError::Invalid(
+            "board required for adjacency validation",
+        ))?;
+        let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
+            "coordinates required for adjacency validation",
+        ))?;
         let size = input.size.unwrap_or(BOARD_SIZE);
 
         for &coord in coordinates {
@@ -321,9 +322,9 @@ pub struct StraightLineValidationStrategy;
 
 impl ValidationStrategy for StraightLineValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let coordinates = input.coordinates.as_ref().ok_or_else(|| {
-            GameError::Invalid("coordinates required for straight line validation")
-        })?;
+        let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
+            "coordinates required for straight line validation",
+        ))?;
 
         if coordinates.len() <= 1 {
             return Ok(());
@@ -350,10 +351,9 @@ pub struct ContiguityValidationStrategy;
 
 impl ValidationStrategy for ContiguityValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let coordinates = input
-            .coordinates
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("coordinates required for contiguity validation"))?;
+        let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
+            "coordinates required for contiguity validation",
+        ))?;
 
         if coordinates.len() <= 1 {
             return Ok(());
@@ -393,9 +393,11 @@ impl ValidationStrategy for ShipLengthValidationStrategy {
         let length = input
             .ship_length
             .or_else(|| input.coordinates.as_ref().map(|coords| coords.len() as u8))
-            .ok_or_else(|| GameError::Invalid("ship length required for length validation"))?;
+            .ok_or(GameError::Invalid(
+                "ship length required for length validation",
+            ))?;
 
-        if length < 2 || length > 5 {
+        if !(2..=5).contains(&length) {
             return Err(GameError::Invalid("ship length must be between 2 and 5"));
         }
         Ok(())
@@ -411,7 +413,7 @@ pub struct FleetCompositionValidationStrategy;
 
 impl ValidationStrategy for FleetCompositionValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let composition = input.fleet_composition.ok_or_else(|| {
+        let composition = input.fleet_composition.ok_or({
             GameError::Invalid("fleet composition required for composition validation")
         })?;
 
@@ -441,10 +443,9 @@ pub struct ShipOverlapValidationStrategy;
 
 impl ValidationStrategy for ShipOverlapValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let ships = input
-            .ships
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("ships required for ship overlap validation"))?;
+        let ships = input.ships.as_ref().ok_or(GameError::Invalid(
+            "ships required for ship overlap validation",
+        ))?;
 
         for i in 0..ships.len() {
             for j in (i + 1)..ships.len() {
@@ -470,10 +471,9 @@ pub struct ShipAdjacencyValidationStrategy;
 
 impl ValidationStrategy for ShipAdjacencyValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let ships = input
-            .ships
-            .as_ref()
-            .ok_or_else(|| GameError::Invalid("ships required for ship adjacency validation"))?;
+        let ships = input.ships.as_ref().ok_or(GameError::Invalid(
+            "ships required for ship adjacency validation",
+        ))?;
 
         for i in 0..ships.len() {
             for j in (i + 1)..ships.len() {
@@ -522,6 +522,12 @@ impl ValidationStrategy for ShipAdjacencyValidationStrategy {
 /// ```
 pub struct ValidationContext {
     strategies: Vec<Box<dyn ValidationStrategy>>,
+}
+
+impl Default for ValidationContext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ValidationContext {

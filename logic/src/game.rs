@@ -220,7 +220,7 @@ impl Match {
         let pending_target = self
             .pending_target
             .as_ref()
-            .ok_or_else(|| GameError::Invalid("no pending shot"))?;
+            .ok_or(GameError::Invalid("no pending shot"))?;
 
         if *pending_target != target {
             return Err(GameError::Forbidden("not the target"));
@@ -308,14 +308,14 @@ impl ShotResolver {
     ) -> Result<String, GameError> {
         let x = match_state
             .pending_x
-            .ok_or_else(|| GameError::Invalid("no pending shot"))?;
+            .ok_or(GameError::Invalid("no pending shot"))?;
         let y = match_state
             .pending_y
-            .ok_or_else(|| GameError::Invalid("no pending shot"))?;
+            .ok_or(GameError::Invalid("no pending shot"))?;
         let shooter = match_state
             .pending_shooter
             .as_ref()
-            .ok_or_else(|| GameError::Invalid("no pending shot"))?;
+            .ok_or(GameError::Invalid("no pending shot"))?;
 
         let cur = target_board.get_board().get(BOARD_SIZE, x, y);
         let is_hit = matches!(cur, Cell::Ship);

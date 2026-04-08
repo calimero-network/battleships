@@ -1,16 +1,27 @@
 /**
- * Game event types that can be received from the SSE (Server-Sent Events) connection
- * These correspond to the events emitted by the Rust backend
+ * Game event types emitted by the Battleships contract.
+ *
+ * Events are split into two categories matching the contract's context model:
+ * - **Lobby events** arrive on the shared Lobby context (match list, stats).
+ * - **Match events** arrive on a per-game Match context (shots, ships, winner).
  */
 
+export type LobbyEventType =
+  | 'MatchCreated'
+  | 'MatchListUpdated'
+  | 'PlayerStatsUpdated';
+
+export type MatchEventType =
+  | 'ShipsPlaced'
+  | 'ShotProposed'
+  | 'ShotFired'
+  | 'Winner'
+  | 'MatchEnded';
+
+export type GameEventType = LobbyEventType | MatchEventType;
+
 export interface GameEvent {
-  type:
-    | 'MatchCreated'
-    | 'ShipsPlaced'
-    | 'ShotProposed'
-    | 'ShotFired'
-    | 'Winner'
-    | 'MatchEnded';
+  type: GameEventType;
   id: string;
   x?: number;
   y?: number;
@@ -52,20 +63,38 @@ export interface MatchEndedEvent extends GameEvent {
   id: string;
 }
 
-export type AllGameEvents =
+export interface MatchListUpdatedEvent extends GameEvent {
+  type: 'MatchListUpdated';
+}
+
+export interface PlayerStatsUpdatedEvent extends GameEvent {
+  type: 'PlayerStatsUpdated';
+}
+
+export type LobbyEvent =
   | MatchCreatedEvent
+  | MatchListUpdatedEvent
+  | PlayerStatsUpdatedEvent;
+
+export type MatchEvent =
   | ShipsPlacedEvent
   | ShotProposedEvent
   | ShotFiredEvent
   | WinnerEvent
   | MatchEndedEvent;
 
-/**
- * SSE message structure
- */
-export interface SseMessage {
-  type: 'event' | 'error' | 'connected' | 'disconnected';
-  data?: AllGameEvents;
-  error?: string;
-  timestamp?: number;
+export type AllGameEvents = LobbyEvent | MatchEvent;
+
+const LOBBY_EVENT_TYPES: ReadonlySet<string> = new Set<LobbyEventType>([
+  'MatchCreated',
+  'MatchListUpdated',
+  'PlayerStatsUpdated',
+]);
+
+export function isLobbyEvent(event: AllGameEvents): event is LobbyEvent {
+  return LOBBY_EVENT_TYPES.has(event.type);
+}
+
+export function isMatchEvent(event: AllGameEvents): event is MatchEvent {
+  return !LOBBY_EVENT_TYPES.has(event.type);
 }

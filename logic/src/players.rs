@@ -147,6 +147,12 @@ pub struct PlayerBoard {
     placed: bool,
 }
 
+impl Default for PlayerBoard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlayerBoard {
     pub fn new() -> PlayerBoard {
         PlayerBoard {
@@ -172,7 +178,7 @@ impl PlayerBoard {
             }
 
             let ship_len = coords.len();
-            if ship_len < 2 || ship_len > 5 {
+            if !(2..=5).contains(&ship_len) {
                 return Err(GameError::Invalid("ship length must be 2-5"));
             }
 

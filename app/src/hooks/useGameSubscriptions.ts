@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useCalimero } from '@calimero-network/calimero-client';
-import { AllGameEvents } from '../types/events';
+import { useSubscription } from '@calimero-network/mero-react';
+import type { AllGameEvents } from '../types/events';
+import { isLobbyEvent } from '../types/events';
 
 export interface UseGameSubscriptionsOptions {
+  /** Primary context to subscribe to (Match context when in-game, Lobby otherwise). */
   contextId: string;
+  /** Optional second context so Lobby events keep flowing while in a Match. */
+  lobbyContextId?: string;
   matchId?: string;
   onBoardUpdate?: () => void;
   onTurnUpdate?: () => void;
@@ -20,322 +24,299 @@ export interface UseGameSubscriptionsReturn {
   unsubscribe: () => void;
 }
 
+type SubscriptionEvent = {
+  contextId: string;
+  data: unknown;
+};
+
+type GameEventRefreshMode = 'none' | 'debounced' | 'immediate';
+
+type ExecutionEventRecord = {
+  kind?: unknown;
+  data?: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function decodeExecutionPayload(value: unknown): unknown {
+  if (
+    Array.isArray(value) &&
+    value.every((item) => typeof item === 'number')
+  ) {
+    try {
+      return JSON.parse(new TextDecoder().decode(new Uint8Array(value)));
+    } catch {
+      return value;
+    }
+  }
+
+  return value;
+}
+
+function toGameEvent(
+  eventType: unknown,
+  payload: unknown,
+): AllGameEvents | null {
+  if (typeof eventType !== 'string' || !isRecord(payload)) {
+    return null;
+  }
+
+  const id = typeof payload.id === 'string' ? payload.id : '';
+
+  switch (eventType) {
+    case 'MatchCreated':
+      return id ? { type: 'MatchCreated', id } : null;
+    case 'ShipsPlaced':
+      return id ? { type: 'ShipsPlaced', id } : null;
+    case 'ShotProposed': {
+      const { x, y } = payload;
+      if (!id || typeof x !== 'number' || typeof y !== 'number') {
+        return null;
+      }
+
+      return { type: 'ShotProposed', id, x, y };
+    }
+    case 'ShotFired': {
+      const { x, y, result } = payload;
+      if (
+        !id ||
+        typeof x !== 'number' ||
+        typeof y !== 'number' ||
+        typeof result !== 'string'
+      ) {
+        return null;
+      }
+
+      return { type: 'ShotFired', id, x, y, result };
+    }
+    case 'Winner':
+      return id ? { type: 'Winner', id } : null;
+    case 'MatchEnded':
+      return id ? { type: 'MatchEnded', id } : null;
+    case 'MatchListUpdated':
+      return { type: 'MatchListUpdated', id };
+    case 'PlayerStatsUpdated':
+      return { type: 'PlayerStatsUpdated', id };
+    default:
+      return null;
+  }
+}
+
+function parseExecutionEventRecord(value: unknown): AllGameEvents | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const record = value as ExecutionEventRecord;
+  return toGameEvent(record.kind, decodeExecutionPayload(record.data));
+}
+
+export function parseSubscriptionEvent(eventData: unknown): AllGameEvents | null {
+  return parseSubscriptionEvents(eventData)[0] ?? null;
+}
+
+export function parseSubscriptionEvents(eventData: unknown): AllGameEvents[] {
+  const directEvent = toGameEvent(
+    isRecord(eventData) ? (eventData.type ?? eventData.event_type) : undefined,
+    eventData,
+  );
+  if (directEvent) {
+    return [directEvent];
+  }
+
+  if (!isRecord(eventData)) {
+    return [];
+  }
+
+  const events = eventData.events;
+  if (Array.isArray(events)) {
+    const parsedEvents: AllGameEvents[] = [];
+    for (const eventRecord of events) {
+      const parsedEvent = parseExecutionEventRecord(eventRecord);
+      if (parsedEvent) {
+        parsedEvents.push(parsedEvent);
+      }
+    }
+
+    return parsedEvents;
+  }
+
+  const parsedEvent = parseExecutionEventRecord(eventData);
+  return parsedEvent ? [parsedEvent] : [];
+}
+
+export function matchesActiveMatch(
+  activeMatchId: string | undefined,
+  event: AllGameEvents,
+): boolean {
+  if (isLobbyEvent(event)) {
+    return true;
+  }
+
+  if (activeMatchId === undefined) {
+    return true;
+  }
+
+  if (activeMatchId.trim() === '') {
+    return false;
+  }
+
+  return event.id === activeMatchId;
+}
+
+export function getGameEventEffects(event: AllGameEvents): {
+  board: GameEventRefreshMode;
+  turn: GameEventRefreshMode;
+} {
+  switch (event.type) {
+    case 'MatchCreated':
+    case 'ShipsPlaced':
+    case 'Winner':
+    case 'MatchEnded':
+      return { board: 'debounced', turn: 'none' };
+    case 'ShotProposed':
+    case 'ShotFired':
+      return { board: 'immediate', turn: 'immediate' };
+    case 'MatchListUpdated':
+    case 'PlayerStatsUpdated':
+      return { board: 'none', turn: 'none' };
+    default: {
+      const exhaustiveEvent: never = event;
+      return exhaustiveEvent;
+    }
+  }
+}
+
+/**
+ * Build the deduplicated list of context ids to subscribe to.
+ *
+ * When a separate `lobbyContextId` is provided (e.g. while the player is
+ * inside a Match context), both contexts are subscribed so Lobby-level
+ * events (match list updates, stats) keep flowing alongside Match events.
+ */
+function buildContextIds(
+  contextId: string,
+  lobbyContextId: string | undefined,
+  isEnabled: boolean,
+): string[] {
+  if (!isEnabled) return [];
+
+  const ids: string[] = [];
+  if (contextId) ids.push(contextId);
+  if (lobbyContextId && lobbyContextId !== contextId) ids.push(lobbyContextId);
+  return ids;
+}
+
 export function useGameSubscriptions({
   contextId,
+  lobbyContextId,
   matchId,
   onBoardUpdate,
   onTurnUpdate,
   onGameEvent,
 }: UseGameSubscriptionsOptions): UseGameSubscriptionsReturn {
-  const { app } = useCalimero();
-
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastEvent, setLastEvent] = useState<AllGameEvents | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<AllGameEvents[]>([]);
+  const [isEnabled, setIsEnabled] = useState(true);
 
-  const currentSubscriptionRef = useRef<string | null>(null);
-  const isProcessingEvent = useRef(false);
-  const hasSubscribedRef = useRef(false);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Create debounced functions using useMemo to avoid recreating them on every render
   const debouncedBoardUpdate = useMemo(() => {
-    let timeout: ReturnType<typeof setTimeout>;
     return () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+
+      debounceTimeoutRef.current = setTimeout(() => {
         onBoardUpdate?.();
       }, 300);
     };
   }, [onBoardUpdate]);
 
-  const handleGameEvent = useCallback(
-    (event: AllGameEvents) => {
-      console.log('🎮 Game event received:', event);
-      console.log('🔄 Triggering UI refresh for event type:', event.type);
-
-      // Add to events list
-      setEvents((prev) => [...prev, event]);
-      setLastEvent(event);
-
-      switch (event.type) {
-        case 'MatchCreated':
-          console.log('→ MatchCreated: calling boardUpdate');
-          debouncedBoardUpdate();
-          break;
-
-        case 'ShipsPlaced':
-          console.log('→ ShipsPlaced: calling boardUpdate');
-          debouncedBoardUpdate();
-          break;
-
-        case 'ShotProposed':
-          console.log(
-            '→ ShotProposed: calling boardUpdate + turnUpdate IMMEDIATELY',
-          );
-          // Refresh immediately so pending shot state is reflected
-          onBoardUpdate?.();
-          onTurnUpdate?.();
-          break;
-
-        case 'ShotFired':
-          console.log(
-            '→ ShotFired: calling boardUpdate + turnUpdate IMMEDIATELY',
-          );
-          // Call immediately for instant turn feedback
-          onBoardUpdate?.();
-          onTurnUpdate?.();
-          break;
-
-        case 'Winner':
-          console.log('→ Winner: calling boardUpdate');
-          debouncedBoardUpdate();
-          break;
-
-        case 'MatchEnded':
-          console.log('→ MatchEnded: calling boardUpdate');
-          debouncedBoardUpdate();
-          break;
-      }
-
-      // Fallback: trigger a refresh on any game event to keep UI in sync
-      console.log('→ Fallback: calling boardUpdate');
-      debouncedBoardUpdate();
-
-      // Call custom event handler
-      onGameEvent?.(event);
-    },
-    [debouncedBoardUpdate, onBoardUpdate, onTurnUpdate, onGameEvent],
-  );
-
-  const parseGameEvent = useCallback((eventData: any): AllGameEvents | null => {
-    console.log('🔍 Parsing event data:', JSON.stringify(eventData, null, 2));
-    try {
-      // Handle different event structures from Calimero
-      if (eventData.event_type) {
-        console.log('  → Found direct event_type:', eventData.event_type);
-        // Direct event structure
-        switch (eventData.event_type) {
-          case 'MatchCreated':
-            return { type: 'MatchCreated', id: eventData.id };
-          case 'ShipsPlaced':
-            return { type: 'ShipsPlaced', id: eventData.id };
-          case 'ShotProposed':
-            return {
-              type: 'ShotProposed',
-              id: eventData.id,
-              x: eventData.x,
-              y: eventData.y,
-            };
-          case 'ShotFired':
-            return {
-              type: 'ShotFired',
-              id: eventData.id,
-              x: eventData.x,
-              y: eventData.y,
-              result: eventData.result,
-            };
-          case 'Winner':
-            return { type: 'Winner', id: eventData.id };
-          case 'MatchEnded':
-            return { type: 'MatchEnded', id: eventData.id };
-        }
-      } else if (eventData.events && Array.isArray(eventData.events)) {
-        console.log(
-          '  → Found events array with',
-          eventData.events.length,
-          'events',
-        );
-        // Handle execution/state mutation events array
-        for (const executionEvent of eventData.events) {
-          const kind = executionEvent.kind;
-          const raw = executionEvent.data;
-          console.log('    → Processing event kind:', kind, 'data:', raw);
-          if (!kind || raw === undefined || raw === null) continue;
-
-          // Data can be a byte array representing JSON. Decode if necessary.
-          let payload: any = raw;
-          try {
-            if (
-              Array.isArray(raw) &&
-              raw.every((n: any) => typeof n === 'number')
-            ) {
-              const decoder = new TextDecoder();
-              const jsonStr = decoder.decode(new Uint8Array(raw));
-              console.log('    → Decoded JSON string:', jsonStr);
-              payload = JSON.parse(jsonStr);
-            }
-          } catch (e) {
-            console.warn('Failed to decode execution event payload', e);
-          }
-
-          console.log('    → Final payload:', payload);
-          switch (kind) {
-            case 'MatchCreated':
-              return { type: 'MatchCreated', id: payload.id } as AllGameEvents;
-            case 'ShipsPlaced':
-              return { type: 'ShipsPlaced', id: payload.id } as AllGameEvents;
-            case 'ShotProposed':
-              return {
-                type: 'ShotProposed',
-                id: payload.id,
-                x: payload.x,
-                y: payload.y,
-              } as AllGameEvents;
-            case 'ShotFired':
-              return {
-                type: 'ShotFired',
-                id: payload.id,
-                x: payload.x,
-                y: payload.y,
-                result: payload.result,
-              } as AllGameEvents;
-            case 'Winner':
-              return { type: 'Winner', id: payload.id } as AllGameEvents;
-            case 'MatchEnded':
-              return { type: 'MatchEnded', id: payload.id } as AllGameEvents;
-          }
-        }
-      }
-      console.log('  ⚠️ No matching event structure found');
-    } catch (error) {
-      console.error('Error parsing game event:', error);
-    }
-    return null;
-  }, []);
-
   const eventCallback = useCallback(
-    async (event: any) => {
-      // Log all incoming events for debugging
-      console.log('📡 Calimero SSE Event:', {
-        type: event.type,
-        timestamp: new Date().toISOString(),
-        data: event.data ? Object.keys(event.data) : 'no data',
-        fullEvent: event,
-      });
-
-      // Prevent infinite loops
-      if (isProcessingEvent.current) {
-        console.log('Event processing already in progress, skipping');
-        return;
-      }
-
-      isProcessingEvent.current = true;
-
+    (event: SubscriptionEvent) => {
       try {
-        // Handle different event types
-        switch (event.type) {
-          case 'StateMutation':
-            console.log('🔄 Handling StateMutation event');
-            if (event.data) {
-              const gameEvent = parseGameEvent(event.data);
-              if (gameEvent) {
-                console.log(
-                  '  ✅ Successfully parsed StateMutation to:',
-                  gameEvent,
-                );
-                handleGameEvent(gameEvent);
-              } else {
-                console.log('  ❌ Failed to parse StateMutation event');
-              }
-            }
-            break;
+        const gameEvents = parseSubscriptionEvents(event.data).filter((gameEvent) =>
+          matchesActiveMatch(matchId, gameEvent),
+        );
+        if (gameEvents.length === 0) {
+          return;
+        }
 
-          case 'ExecutionEvent':
-            console.log('⚡ Handling ExecutionEvent');
-            if (event.data) {
-              const gameEvent = parseGameEvent(event.data);
-              if (gameEvent) {
-                console.log(
-                  '  ✅ Successfully parsed ExecutionEvent to:',
-                  gameEvent,
-                );
-                handleGameEvent(gameEvent);
-              } else {
-                console.log('  ❌ Failed to parse ExecutionEvent');
-              }
-            }
-            break;
+        setEvents((previousEvents) => [...previousEvents, ...gameEvents]);
+        setLastEvent(gameEvents[gameEvents.length - 1]);
+        setError(null);
 
-          default:
-            console.log(
-              'Unknown event type:',
-              event.type,
-              '- Full event:',
-              event,
-            );
+        for (const gameEvent of gameEvents) {
+          const effects = getGameEventEffects(gameEvent);
+          if (effects.board === 'immediate') {
+            onBoardUpdate?.();
+          } else if (effects.board === 'debounced') {
+            debouncedBoardUpdate();
+          }
+
+          if (effects.turn === 'immediate') {
+            onTurnUpdate?.();
+          }
+
+          onGameEvent?.(gameEvent);
         }
       } catch (callbackError) {
         console.error('Error in subscription callback:', callbackError);
         setError('Error processing game event');
-      } finally {
-        isProcessingEvent.current = false;
       }
     },
-    [parseGameEvent, handleGameEvent],
+    [
+      debouncedBoardUpdate,
+      matchId,
+      onBoardUpdate,
+      onGameEvent,
+      onTurnUpdate,
+    ],
   );
 
   const subscribe = useCallback(() => {
-    if (!app || !contextId || isConnecting || hasSubscribedRef.current) return;
-
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      // Unsubscribe from previous context if exists
-      if (currentSubscriptionRef.current) {
-        console.log(
-          '🔄 Unsubscribing from previous context:',
-          currentSubscriptionRef.current,
-        );
-        app.unsubscribeFromEvents([currentSubscriptionRef.current]);
-      }
-
-      // Subscribe to new context with the updated SSE client
-      console.log('📤 Subscribing to context:', contextId);
-      app.subscribeToEvents([contextId], eventCallback);
-
-      currentSubscriptionRef.current = contextId;
-      hasSubscribedRef.current = true;
-      setIsSubscribed(true);
-      setIsConnecting(false);
-
-      console.log('✅ Subscribed to game events for context:', contextId);
-    } catch (error) {
-      console.error('Failed to subscribe to game events:', error);
-      setError('Failed to subscribe to events');
-      setIsConnecting(false);
-    }
-  }, [app, contextId, isConnecting, eventCallback]);
+    setIsEnabled(true);
+  }, []);
 
   const unsubscribe = useCallback(() => {
-    if (!app || !currentSubscriptionRef.current) return;
+    setIsEnabled(false);
+    setIsSubscribed(false);
+    setIsConnecting(false);
+  }, []);
 
-    try {
-      app.unsubscribeFromEvents([currentSubscriptionRef.current]);
-      currentSubscriptionRef.current = null;
-      hasSubscribedRef.current = false;
-      setIsSubscribed(false);
-      console.log('❌ Unsubscribed from game events');
-    } catch (error) {
-      console.error('Failed to unsubscribe from game events:', error);
-    }
-  }, [app]);
+  const contextIds = useMemo(
+    () => buildContextIds(contextId, lobbyContextId, isEnabled),
+    [contextId, lobbyContextId, isEnabled],
+  );
 
-  // Auto-subscribe when contextId changes (only once)
   useEffect(() => {
-    if (contextId && app && !hasSubscribedRef.current) {
-      subscribe();
+    if (contextIds.length === 0) {
+      setIsSubscribed(false);
+      setIsConnecting(false);
+      return;
     }
-  }, [contextId, app, subscribe]);
 
-  // Cleanup on unmount
+    setError(null);
+    setIsConnecting(true);
+    setIsSubscribed(true);
+    setIsConnecting(false);
+  }, [contextIds]);
+
+  useSubscription(contextIds, eventCallback);
+
   useEffect(() => {
     return () => {
-      unsubscribe();
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
     };
-  }, [unsubscribe]);
+  }, []);
 
   return {
     isSubscribed,

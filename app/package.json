@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@calimero-network/calimero-client": "^1.23.1",
     "@calimero-network/mero-icons": "^0.0.4",
+    "@calimero-network/mero-react": "^1.1.0",
     "@calimero-network/mero-ui": "^0.3.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -19,6 +19,7 @@
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
+    "@calimero-network/abi-codegen": "^1.0.1",
     "@eslint/js": "^9.4.0",
     "@types/eslint__js": "^8.42.3",
     "@types/node": "^16.18.98",
@@ -38,14 +39,16 @@
     "eslint-plugin-react-refresh": "^0.4.7",
     "gh-pages": "^6.1.1",
     "prettier": "3.3.2",
-    "typescript": "^4.9.5",
+    "typescript": "^5.7.0",
     "typescript-eslint": "^7.13.0",
     "vite": "^7.1.11",
-    "vite-plugin-node-polyfills": "^0.24.0"
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vitest": "^4.1.2"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "codegen": "calimero-abi-codegen -i ../logic/res/abi.json -o src/api --client-name AbiClient",
     "lint": "concurrently \"pnpm:lint:*(!fix)\"",
     "lint:src": "eslint . --ext .ts,.tsx src --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "concurrently \"pnpm:lint:*:fix\"",
@@ -53,7 +56,8 @@
     "preview": "vite preview",
     "predeploy": "pnpm run build",
     "deploy": "gh-pages -d build",
-    "prettier": "exec prettier . --write"
+    "prettier": "exec prettier . --write",
+    "test": "vitest run"
   },
   "eslintConfig": {
     "extends": [

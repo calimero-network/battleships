@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "package": "com.calimero.battleships",
+  "appVersion": "0.2.5",
+  "minRuntimeVersion": "0.1.0",
+  "metadata": {
+    "name": "Battleships",
+    "description": "Battleships on Calimero — group-aware lobby and match architecture.",
+    "author": "Calimero"
+  },
+  "wasm": {
+    "path": "app.wasm",
+    "size": 0,
+    "hash": null
+  },
+  "abi": {
+    "path": "abi.json",
+    "size": 0,
+    "hash": null
+  },
+  "migrations": [],
+  "links": {
+    "frontend": "http://localhost:5173/"
+  }
+}

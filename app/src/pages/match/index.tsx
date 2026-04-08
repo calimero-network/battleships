@@ -21,35 +21,59 @@ import {
   CopyToClipboard,
 } from '@calimero-network/mero-ui';
 import {
-  CalimeroConnectButton,
-  ConnectionType,
-  useCalimero,
-} from '@calimero-network/calimero-client';
+  useMero,
+} from '@calimero-network/mero-react';
 import { createKvClient, AbiClient } from '../../features/kv/api';
+import type { ContextRole } from '../../features/kv/api';
+import type { MatchSummary } from '../../api/AbiClient';
 import type { AllGameEvents } from '../../types/events';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
+import { useBattleshipsLobby } from '../../hooks/useBattleshipsLobby';
+import { resolveEffectiveMatchId, SHIP_TARGETS, validateFleetPayload } from './config';
 
 export default function MatchPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, logout, app, appUrl } = useCalimero();
+  const {
+    isAuthenticated,
+    logout,
+    mero,
+    nodeUrl,
+    contextIdentity,
+    connectToNode,
+  } = useMero();
+  const defaultNodeUrl =
+    import.meta.env.VITE_NODE_URL?.trim() || 'http://node1.127.0.0.1.nip.io';
   const { show } = useToast();
 
-  // View state
-  const [view, setView] = useState<'lobby' | 'game'>('lobby');
+  const lobby = useBattleshipsLobby();
 
-  // API and context
-  const [api, setApi] = useState<AbiClient | null>(null);
+  // View state: 'lobby-select' | 'lobby' | 'game'
+  const [view, setView] = useState<'lobby-select' | 'lobby' | 'game'>('lobby-select');
+
+  // Lobby creation form
+  const [newLobbyName, setNewLobbyName] = useState('');
+  const [invitationJson, setInvitationJson] = useState<string | null>(null);
+  const [joinInvitationInput, setJoinInvitationInput] = useState('');
+
+  // Lobby API and context
+  const [lobbyApi, setLobbyApi] = useState<AbiClient | null>(null);
   const [currentContext, setCurrentContext] = useState<{
     applicationId: string;
     contextId: string;
     nodeUrl: string;
   } | null>(null);
 
+  // Match API client (targets the per-game Match context)
+  const [matchApi, setMatchApi] = useState<AbiClient | null>(null);
+  const [matchContextId, setMatchContextId] = useState<string | null>(null);
+
   // Match management
   const [matchId, setMatchId] = useState<string>('');
+  const [runtimeMatchId, setRuntimeMatchId] = useState<string | null>(null);
   const [player2, setPlayer2] = useState<string>('');
-  const [myMatches, setMyMatches] = useState<string[]>([]);
+  const [myMatches, setMyMatches] = useState<MatchSummary[]>([]);
+  const [creatingMatch, setCreatingMatch] = useState(false);
 
   // Game state
   const [size, setSize] = useState<number>(10);
@@ -69,8 +93,8 @@ export default function MatchPage() {
     Array.from({ length: 10 }, () => Array(10).fill(false)),
   );
   const [selectedShip, setSelectedShip] = useState<number | null>(null);
-  const [shipCounts, setShipCounts] = useState<number[]>([0, 0, 0, 0]); // [2,3,4,5] lengths
-  const [shipTargets] = useState<number[]>([1, 1, 2, 1]); // [2,3,4,5] required counts
+  const [shipCounts, setShipCounts] = useState<number[]>([0, 0, 0, 0]);
+  const [shipTargets] = useState<number[]>([...SHIP_TARGETS]);
   const [isHorizontal, setIsHorizontal] = useState<boolean>(true);
   const [isRemovalMode, setIsRemovalMode] = useState<boolean>(false);
 
@@ -81,16 +105,73 @@ export default function MatchPage() {
   const [selectedShotY, setSelectedShotY] = useState<number | null>(null);
 
   const loadingRef = useRef<boolean>(false);
+  const effectiveMatchId = resolveEffectiveMatchId(matchId, runtimeMatchId);
+  const [matchApiReady, setMatchApiReady] = useState(false);
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+
+  const isUninitializedError = (error: unknown): boolean => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : '';
+    return message.includes('Uninitialized');
+  };
+
+  const ensureMatchContextReady = useCallback(
+    async (client: AbiClient, attempts = 10, delayMs = 400): Promise<void> => {
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          await client.getActiveMatchId();
+          return;
+        } catch (error) {
+          if (!isUninitializedError(error)) {
+            throw error;
+          }
+          if (attempt === attempts - 1) {
+            throw error;
+          }
+          await sleep(delayMs);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/');
   }, [isAuthenticated, navigate]);
 
+  // Transition from lobby-select to lobby when group + lobby are resolved
+  useEffect(() => {
+    if (view === 'lobby-select' && lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
+      setView('lobby');
+    }
+  }, [view, lobby.selectedLobby, lobby.lobbyJoined, lobby.lobbyContextId]);
+
+  // If URL has match_id + context_id, go straight to game view
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const urlMatchId = params.get('match_id');
+    const urlContextId = params.get('context_id');
+    if (urlMatchId && urlContextId && location.pathname === '/match') {
+      setMatchId(urlMatchId);
+      setRuntimeMatchId(null);
+      setMatchContextId(urlContextId);
+      setView('game');
+    }
+  }, [location.pathname, location.search]);
+
   const loadBoards = useCallback(async () => {
-    if (!api || !matchId) return;
+    if (!matchApi || !effectiveMatchId) return;
     try {
-      const own = await api.getOwnBoard({ match_id: matchId });
-      const shots = await api.getShots({ match_id: matchId });
+      const own = await matchApi.getOwnBoard({ match_id: effectiveMatchId });
+      const shots = await matchApi.getShots({ match_id: effectiveMatchId });
       setSize(own.size);
       const ownArr = own.board.toArray();
       const shotsArr = shots.shots.toArray();
@@ -98,57 +179,49 @@ export default function MatchPage() {
       setShotsBoard(shotsArr);
       const anyShip = ownArr.some((v) => v === 1 || v === 2 || v === 3);
       setPlaced(anyShip);
-    } catch (e) {
-      // ignore
+    } catch {
+      // board not yet available
     }
-  }, [api, matchId]);
+  }, [matchApi, effectiveMatchId]);
 
   const loadTurnInfo = useCallback(async () => {
-    console.log('🔄 loadTurnInfo called', { api: !!api, matchId, currentUser });
-    if (!api || !matchId) return;
+    if (!matchApi || !effectiveMatchId) return;
     try {
-      const turn = await api.getCurrentTurn();
-      console.log('  📥 Fetched turn from API:', turn);
-      console.log('  👤 Current user:', currentUser);
+      const turn = await matchApi.getCurrentTurn();
       setCurrentTurn(turn);
-    } catch (e) {
-      console.error('Failed to load turn info:', e);
+    } catch {
+      // turn info not yet available
     }
-  }, [api, matchId, currentUser]);
+  }, [matchApi, effectiveMatchId]);
 
-  // Update isMyTurn whenever currentTurn or currentUser changes
   useEffect(() => {
     if (currentUser && currentTurn) {
       setIsMyTurn(currentUser === currentTurn);
     }
   }, [currentTurn, currentUser]);
 
-  // Wrap callbacks in useCallback to avoid stale closures
   const handleBoardUpdate = useCallback(() => {
-    console.log(
-      '📋 onBoardUpdate called, current matchId:',
-      matchId,
-      'currentUser:',
-      currentUser,
-    );
     loadBoards();
     loadTurnInfo();
-  }, [matchId, currentUser, loadBoards, loadTurnInfo]);
+  }, [loadBoards, loadTurnInfo]);
 
   const handleTurnUpdate = useCallback(() => {
-    console.log(
-      '🔄 onTurnUpdate called, current matchId:',
-      matchId,
-      'currentUser:',
-      currentUser,
-    );
     loadTurnInfo();
-  }, [matchId, currentUser, loadTurnInfo]);
+  }, [loadTurnInfo]);
+
+  const refreshMatchList = useCallback(async () => {
+    if (!lobbyApi) return;
+    try {
+      const summaries = await lobbyApi.getMatches();
+      setMyMatches(summaries);
+    } catch {
+      // non-critical
+    }
+  }, [lobbyApi]);
 
   const handleGameEvent = useCallback(
     (event: AllGameEvents) => {
       if (event.type === 'ShotProposed') {
-        // If it's not our turn, we are the target → overlay pending on our board
         if (
           !isMyTurn &&
           typeof event.x === 'number' &&
@@ -164,149 +237,259 @@ export default function MatchPage() {
       ) {
         setPendingShot(null);
       }
+      if (
+        event.type === 'MatchListUpdated' ||
+        event.type === 'MatchCreated' ||
+        event.type === 'MatchEnded' ||
+        event.type === 'Winner'
+      ) {
+        refreshMatchList();
+      }
     },
-    [isMyTurn],
+    [isMyTurn, refreshMatchList],
   );
 
-  // Game event subscriptions
+  const subscriptionContextId = view === 'game' && matchContextId
+    ? matchContextId
+    : (currentContext?.contextId || '');
+
+  const lobbySubscriptionContextId =
+    view === 'game' ? (currentContext?.contextId ?? undefined) : undefined;
+
   const { isSubscribed: isEventSubscribed } = useGameSubscriptions({
-    contextId: currentContext?.contextId || '',
-    matchId,
+    contextId: subscriptionContextId,
+    lobbyContextId: lobbySubscriptionContextId,
+    matchId: effectiveMatchId,
     onBoardUpdate: handleBoardUpdate,
     onTurnUpdate: handleTurnUpdate,
     onGameEvent: handleGameEvent,
   });
 
+  // Initialize Lobby API client when lobby context is joined and ready
   useEffect(() => {
-    if (!app) return;
+    if (!mero || !lobby.lobbyContextId || !lobby.lobbyJoined) return;
+
+    const executorKey = lobby.executorPublicKey ?? contextIdentity;
+    if (!executorKey) return;
+
     (async () => {
       try {
-        const client = await createKvClient(app);
-        setApi(client);
-        const contexts = await app.fetchContexts();
-        if (contexts.length > 0) {
-          const context = contexts[0];
-          setCurrentContext({
-            applicationId: context.applicationId,
-            contextId: context.contextId,
-            nodeUrl: appUrl || 'http://node1.127.0.0.1.nip.io',
-          });
-        }
-        // pick match_id from URL if present
-        const params = new URLSearchParams(location.search);
-        const mid = params.get('match_id');
-        if (mid) {
-          setMatchId(mid);
-          setView('game');
-        }
-        // fetch my matches
+        const { client, context } = await createKvClient(mero, {
+          contextId: lobby.lobbyContextId,
+          contextIdentity: executorKey,
+          role: 'lobby' as ContextRole,
+        });
+        setLobbyApi(client);
+        setCurrentContext({
+          applicationId: context.applicationId,
+          contextId: context.contextId,
+          nodeUrl: nodeUrl || defaultNodeUrl,
+        });
+
         try {
-          const ids = await client.getMatches();
-          setMyMatches(ids);
-        } catch (_) {}
-        // fetch current user and debug app object
-        try {
-          // Debug: log app object to see what's available
-          console.log('App object:', app);
-          console.log('App keys:', Object.keys(app || {}));
-
-          // Try to get user from the context member
-          if (contexts.length > 0 && contexts[0].identityKey) {
-            console.log(
-              '✅ Got current user from context:',
-              contexts[0].identityKey,
-            );
-            setCurrentUser(contexts[0].identityKey);
-          } else {
-            console.warn(
-              '⚠️ No identityKey in context, trying contract method...',
-            );
-            // Fallback: try getting from contract
-            try {
-              const user = await client.getCurrentUser();
-              console.log(
-                '✅ Successfully fetched current user from contract:',
-                user,
-              );
-              setCurrentUser(user);
-            } catch (e) {
-              console.error('❌ Failed to get current user from contract:', e);
-            }
-          }
-
-          // Debug SSE connection
-          if (app.eventStream) {
-            console.log('EventStream object:', app.eventStream);
-            if (app.eventStream.eventSource) {
-              const es = app.eventStream.eventSource;
-              console.log('EventSource URL:', es.url);
-              console.log(
-                'EventSource readyState:',
-                es.readyState,
-                es.readyState === 0
-                  ? '(CONNECTING)'
-                  : es.readyState === 1
-                    ? '(OPEN)'
-                    : '(CLOSED)',
-              );
-
-              // Listen for SSE connection events
-              es.addEventListener('open', () => {
-                console.log('✅ EventSource OPENED');
-              });
-              es.addEventListener('error', (e) => {
-                console.error('❌ EventSource ERROR:', e);
-                console.log(
-                  'EventSource readyState after error:',
-                  es.readyState,
-                );
-              });
-              es.addEventListener('message', (e) => {
-                console.log('📨 RAW EventSource message:', e.data);
-              });
-            } else {
-              console.warn('⚠️ No eventSource in eventStream!');
-            }
-          } else {
-            console.warn('⚠️ No eventStream in app!');
-          }
-        } catch (e) {
-          console.error('❌ Error in user/SSE setup:', e);
+          const summaries = await client.getMatches();
+          setMyMatches(summaries);
+        } catch {
+          // matches not available yet
         }
+
+        setCurrentUser(executorKey);
       } catch (e) {
-        console.error(e);
-        show({ title: 'Failed to initialize API client', variant: 'error' });
+        console.error('Lobby API init failed:', e);
       }
     })();
-  }, [app, appUrl, show, location.search]);
+  }, [
+    contextIdentity,
+    defaultNodeUrl,
+    lobby.lobbyContextId,
+    lobby.lobbyJoined,
+    lobby.executorPublicKey,
+    mero,
+    nodeUrl,
+  ]);
+
+  // Initialize Match API client when entering a game with a match context
+  useEffect(() => {
+    if (!mero || !matchContextId || view !== 'game') {
+      setMatchApi(null);
+      setMatchApiReady(false);
+      return;
+    }
+
+    const executorKey = lobby.executorPublicKey ?? contextIdentity;
+    let cancelled = false;
+    setMatchApiReady(false);
+
+    (async () => {
+      try {
+        const { client } = await createKvClient(mero, {
+          contextId: matchContextId,
+          contextIdentity: executorKey,
+          role: 'match' as ContextRole,
+        });
+        await ensureMatchContextReady(client);
+        if (!cancelled) {
+          setMatchApi(client);
+          setMatchApiReady(true);
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : '';
+        const missingContextLocally = message.includes(
+          'The requested context is not available on this node.',
+        );
+
+        if (missingContextLocally && lobby.groupId) {
+          try {
+            await mero.admin.joinContext(matchContextId);
+            const { client } = await createKvClient(mero, {
+              contextId: matchContextId,
+              contextIdentity: executorKey,
+              role: 'match' as ContextRole,
+            });
+            await ensureMatchContextReady(client);
+            if (!cancelled) {
+              setMatchApi(client);
+              setMatchApiReady(true);
+            }
+            return;
+          } catch (joinErr) {
+            console.error('joinContext fallback failed:', joinErr);
+          }
+        } else {
+          console.error(e);
+        }
+
+        if (!cancelled) {
+          setMatchApi(null);
+          setMatchApiReady(false);
+          show({ title: 'Failed to initialize match API client', variant: 'error' });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    contextIdentity,
+    lobby.executorPublicKey,
+    lobby.groupId,
+    matchContextId,
+    mero,
+    show,
+    view,
+    ensureMatchContextReady,
+  ]);
+
+  useEffect(() => {
+    if (!matchApi || view !== 'game') {
+      setRuntimeMatchId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const activeId = await matchApi.getActiveMatchId();
+        if (!cancelled) {
+          setRuntimeMatchId(
+            typeof activeId === 'string' && activeId.trim().length > 0
+              ? activeId
+              : null,
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setRuntimeMatchId(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matchApi, view]);
 
   const createMatch = useCallback(async () => {
-    if (!api) return;
+    if (!lobbyApi || !mero || !currentContext || !lobby.namespaceId) return;
+    setCreatingMatch(true);
     try {
-      const id = await api.createMatch({ player2 });
+      // 1. Create a pending match in the Lobby contract
+      const id = await lobbyApi.createMatch({ player2 });
+      show({ title: `Match allocated: ${id}`, variant: 'success' });
+
+      // 2. Create a match subgroup inside the namespace (restricted to the two players)
+      const { groupId: matchSubgroupId } = await mero.admin.createGroupInNamespace(
+        lobby.namespaceId,
+        { alias: `match-${id}` },
+      );
+
+      // 3. Add player2 to the match subgroup
+      await mero.admin.addGroupMembers(matchSubgroupId, {
+        members: [{ identity: player2, role: 'Member' }],
+      });
+
+      // 4. Create the Match context inside the subgroup
+      const executorKey = lobby.executorPublicKey ?? contextIdentity;
+      const initParams = JSON.stringify({
+        context_type: 'Match',
+        player1: executorKey,
+        player2,
+        lobby_context_id: currentContext.contextId,
+      });
+      const initBytes = Array.from(new TextEncoder().encode(initParams));
+
+      const { contextId: newContextId } = await mero.admin.createContext({
+        applicationId: currentContext.applicationId,
+        initializationParams: initBytes,
+        groupId: matchSubgroupId,
+      });
+
+      // 5. Link the Match context back into the Lobby
+      await lobbyApi.setMatchContextId({
+        match_id: id,
+        context_id: newContextId,
+      });
+
+      // 6. Refresh the match list
+      try {
+        const summaries = await lobbyApi.getMatches();
+        setMyMatches(summaries);
+      } catch {
+        // non-critical
+      }
+
+      // 7. Navigate to the match with both identifiers
       setMatchId(id);
+      setRuntimeMatchId(null);
+      setMatchContextId(newContextId);
       setView('game');
-      // Update URL with match_id so refresh works
-      navigate(`/match?match_id=${id}`, { replace: true });
-      show({ title: `Match created: ${id}`, variant: 'success' });
+      navigate(`/match?match_id=${encodeURIComponent(id)}&context_id=${encodeURIComponent(newContextId)}`, { replace: true });
+      show({ title: `Match created and linked`, variant: 'success' });
     } catch (e) {
       console.error('createMatch', e);
       show({
         title: e instanceof Error ? e.message : 'Failed to create match',
         variant: 'error',
       });
+    } finally {
+      setCreatingMatch(false);
     }
-  }, [api, player2, show, navigate]);
+  }, [lobbyApi, mero, currentContext, player2, lobby.executorPublicKey, lobby.namespaceId, contextIdentity, show, navigate]);
 
   const openGame = useCallback(
-    (id: string) => {
+    (id: string, contextId: string) => {
       setMatchId(id);
+      setRuntimeMatchId(null);
+      setMatchContextId(contextId);
       setView('game');
-      // Update URL with match_id so refresh works
-      navigate(`/match?match_id=${id}`, { replace: true });
-      loadBoards();
+      navigate(
+        `/match?match_id=${encodeURIComponent(id)}&context_id=${encodeURIComponent(contextId)}`,
+        { replace: true },
+      );
     },
-    [loadBoards, navigate],
+    [navigate],
   );
 
   useEffect(() => {
@@ -317,8 +500,11 @@ export default function MatchPage() {
   }, [view, loadBoards, loadTurnInfo]);
 
   const placeShips = useCallback(async () => {
-    if (!api) return;
-    if (!matchId) {
+    if (!matchApi || !matchApiReady) {
+      show({ title: 'Match context is still syncing, try again in a moment', variant: 'warning' });
+      return;
+    }
+    if (!effectiveMatchId) {
       show({ title: 'Set match id first', variant: 'error' });
       return;
     }
@@ -347,7 +533,14 @@ export default function MatchPage() {
         loadingRef.current = false;
         return;
       }
-      await api.placeShips({ match_id: matchId, ships: groups });
+      const fleetError = validateFleetPayload(groups);
+      if (fleetError) {
+        show({ title: fleetError, variant: 'error' });
+        loadingRef.current = false;
+        return;
+      }
+      await ensureMatchContextReady(matchApi);
+      await matchApi.placeShips({ match_id: effectiveMatchId, ships: groups });
       show({ title: 'Ships placed', variant: 'success' });
       await loadBoards();
       await loadTurnInfo();
@@ -360,12 +553,15 @@ export default function MatchPage() {
     } finally {
       loadingRef.current = false;
     }
-  }, [api, matchId, grid, size, show, loadBoards, loadTurnInfo]);
+  }, [matchApi, matchApiReady, effectiveMatchId, grid, size, show, loadBoards, loadTurnInfo, ensureMatchContextReady]);
 
   const proposeShot = useCallback(
     async (shotX?: number, shotY?: number) => {
-      if (!api) return;
-      if (!matchId) {
+      if (!matchApi || !matchApiReady) {
+        show({ title: 'Match context is still syncing, try again in a moment', variant: 'warning' });
+        return;
+      }
+      if (!effectiveMatchId) {
         show({ title: 'Set match id first', variant: 'error' });
         return;
       }
@@ -374,7 +570,8 @@ export default function MatchPage() {
       try {
         const finalX = shotX !== undefined ? shotX : parseInt(x || '0', 10);
         const finalY = shotY !== undefined ? shotY : parseInt(y || '0', 10);
-        await api.proposeShot({ match_id: matchId, x: finalX, y: finalY });
+        await ensureMatchContextReady(matchApi);
+        await matchApi.proposeShot({ match_id: effectiveMatchId, x: finalX, y: finalY });
         show({
           title: `Shot proposed at (${finalX},${finalY})`,
           variant: 'success',
@@ -396,7 +593,7 @@ export default function MatchPage() {
         loadingRef.current = false;
       }
     },
-    [api, matchId, x, y, show, loadBoards, loadTurnInfo],
+    [matchApi, matchApiReady, effectiveMatchId, x, y, show, loadBoards, loadTurnInfo, ensureMatchContextReady],
   );
 
   const handleShotGridClick = useCallback(
@@ -474,11 +671,9 @@ export default function MatchPage() {
           });
         }
       } else if (selectedShip === null) {
-        // single cell toggle
-        setGrid((prev) => {
-          const next = prev.map((row) => row.slice());
-          next[y][x] = !next[y][x];
-          return next;
+        show({
+          title: 'Select a ship length before placing',
+          variant: 'warning',
         });
       } else {
         // place ship of selected length
@@ -501,6 +696,32 @@ export default function MatchPage() {
         }
 
         if (coords.length === shipLen) {
+          const coordsSet = new Set(coords.map(([nx, ny]) => `${nx},${ny}`));
+          const hasAdjacentExisting = coords.some(([nx, ny]) =>
+            [
+              [nx + 1, ny],
+              [nx - 1, ny],
+              [nx, ny + 1],
+              [nx, ny - 1],
+              [nx + 1, ny + 1],
+              [nx + 1, ny - 1],
+              [nx - 1, ny + 1],
+              [nx - 1, ny - 1],
+            ].some(([ax, ay]) => {
+              if (ax < 0 || ay < 0 || ax >= size || ay >= size) return false;
+              if (coordsSet.has(`${ax},${ay}`)) return false;
+              return grid[ay][ax];
+            }),
+          );
+
+          if (hasAdjacentExisting) {
+            show({
+              title: 'Ships cannot touch each other',
+              variant: 'error',
+            });
+            return;
+          }
+
           setGrid((prev) => {
             const next = prev.map((row) => row.slice());
             coords.forEach(([nx, ny]) => (next[ny][nx] = true));
@@ -729,297 +950,66 @@ export default function MatchPage() {
     navigate('/');
   }, [logout, navigate]);
 
-  // Lobby view
-  if (view === 'lobby') {
-    return (
-      <>
-        <MeroNavbar variant="elevated" size="md">
-          <NavbarBrand text="Battleship" />
-          <NavbarMenu align="center">
+  const handleCreateLobby = useCallback(async () => {
+    const id = await lobby.createLobby(newLobbyName || undefined);
+    if (id) {
+      setNewLobbyName('');
+      show({ title: 'Namespace created', variant: 'success' });
+    } else if (lobby.createLobbyError) {
+      show({ title: lobby.createLobbyError.message, variant: 'error' });
+    }
+  }, [lobby, newLobbyName, show]);
+
+  const handleCreateInvitation = useCallback(async () => {
+    const result = await lobby.invitePlayer();
+    if (result) {
+      setInvitationJson(JSON.stringify(result, null, 2));
+      show({ title: 'Invitation created', variant: 'success' });
+    }
+  }, [lobby, show]);
+
+  const handleJoinLobby = useCallback(async () => {
+    if (!joinInvitationInput.trim()) {
+      show({ title: 'Paste an invitation JSON', variant: 'error' });
+      return;
+    }
+    try {
+      const success = await lobby.joinLobby(joinInvitationInput);
+      if (success) {
+        show({ title: 'Joined namespace', variant: 'success' });
+        setJoinInvitationInput('');
+      }
+    } catch (e) {
+      show({
+        title: e instanceof Error ? e.message : 'Failed to join namespace',
+        variant: 'error',
+      });
+    }
+  }, [joinInvitationInput, lobby, show]);
+
+  const handleEnterLobby = useCallback(() => {
+    if (!lobby.lobbyContextId) {
+      show({ title: 'No namespace context available', variant: 'error' });
+      return;
+    }
+    setView('lobby');
+  }, [lobby, show]);
+
+  const renderNavbar = (extra?: React.ReactNode) => (
+    <MeroNavbar variant="elevated" size="md">
+      <NavbarBrand text="Battleship" />
+      <NavbarMenu align="center">
+        {lobby.selectedLobby && (
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.875rem', color: '#9ca3af' }}>
+            <Text size="sm" color="muted">Namespace:</Text>
+            <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+              {lobby.selectedLobby?.alias || lobby.namespaceId?.slice(0, 12) + '...' || 'Unknown'}
+            </Text>
             {currentContext && (
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '1.5rem',
-                  alignItems: 'center',
-                  fontSize: '0.875rem',
-                  color: '#9ca3af',
-                  flexWrap: 'wrap',
-                  justifyContent: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <Text size="sm" color="muted">
-                    Node:
-                  </Text>
-                  <Text
-                    size="sm"
-                    style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
-                  >
-                    {currentContext.nodeUrl
-                      .replace('http://', '')
-                      .replace('https://', '')}
-                  </Text>
-                  <CopyToClipboard
-                    text={currentContext.nodeUrl}
-                    variant="icon"
-                    size="small"
-                    successMessage="Node URL copied!"
-                  />
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <Text size="sm" color="muted">
-                    Context ID:
-                  </Text>
-                  <Text
-                    size="sm"
-                    style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
-                  >
-                    {currentContext.contextId.slice(0, 8)}...
-                    {currentContext.contextId.slice(-8)}
-                  </Text>
-                  <CopyToClipboard
-                    text={currentContext.contextId}
-                    variant="icon"
-                    size="small"
-                    successMessage="Context ID copied!"
-                  />
-                </div>
-                {currentUser && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <Text size="sm" color="muted">
-                      Public Key:
-                    </Text>
-                    <Text
-                      size="sm"
-                      style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
-                    >
-                      {currentUser.slice(0, 8)}...{currentUser.slice(-8)}
-                    </Text>
-                    <CopyToClipboard
-                      text={currentUser}
-                      variant="icon"
-                      size="small"
-                      successMessage="Public Key copied!"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-          </NavbarMenu>
-          <NavbarMenu align="right">
-            {isAuthenticated ? (
-              <Menu variant="compact" size="md">
-                <MenuGroup>
-                  <MenuItem onClick={doLogout}>Logout</MenuItem>
-                </MenuGroup>
-              </Menu>
-            ) : (
-              <NavbarItem>
-                <CalimeroConnectButton
-                  connectionType={{
-                    type: ConnectionType.Custom,
-                    url: 'http://node1.127.0.0.1.nip.io',
-                  }}
-                />
-              </NavbarItem>
-            )}
-          </NavbarMenu>
-        </MeroNavbar>
-        <div
-          style={{
-            minHeight: '100vh',
-            backgroundColor: '#111111',
-            color: 'white',
-          }}
-        >
-          <Grid
-            columns={1}
-            gap={32}
-            maxWidth="100%"
-            justify="center"
-            align="center"
-            style={{ minHeight: '100vh', padding: '2rem' }}
-          >
-            <GridItem>
-              <main
-                style={{
-                  width: '100%',
-                  maxWidth: '1000px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2rem',
-                }}
-              >
-                <Card variant="rounded">
-                  <CardHeader>
-                    <CardTitle>Create New Match</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        createMatch();
-                      }}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns:
-                          'repeat(auto-fit, minmax(220px, 1fr))',
-                        gap: '1rem',
-                      }}
-                    >
-                      <Input
-                        type="text"
-                        placeholder="Player 2 public key (Base58)"
-                        value={player2}
-                        onChange={(e) => setPlayer2(e.target.value)}
-                      />
-                      <Button type="submit" variant="success">
-                        Create
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-
-                <Card variant="rounded">
-                  <CardHeader>
-                    <CardTitle>My Matches</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {myMatches.length === 0 ? (
-                      <div style={{ color: '#9ca3af' }}>
-                        No matches yet. Create one above!
-                      </div>
-                    ) : (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.5rem',
-                        }}
-                      >
-                        {myMatches.map((id) => (
-                          <div
-                            key={id}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '0.75rem',
-                              backgroundColor: '#1f2937',
-                              borderRadius: '0.5rem',
-                            }}
-                          >
-                            <div>
-                              <Text
-                                size="sm"
-                                style={{ fontFamily: 'monospace' }}
-                              >
-                                {id}
-                              </Text>
-                              <div
-                                style={{
-                                  fontSize: '0.75rem',
-                                  color: '#9ca3af',
-                                }}
-                              >
-                                Click to open
-                              </div>
-                            </div>
-                            <Button
-                              variant="primary"
-                              onClick={() => openGame(id)}
-                            >
-                              Open
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </main>
-            </GridItem>
-          </Grid>
-        </div>
-      </>
-    );
-  }
-
-  // Game view
-  return (
-    <>
-      <MeroNavbar variant="elevated" size="md">
-        <NavbarBrand text="Battleship" />
-        <NavbarMenu align="left">
-          <Button variant="secondary" onClick={() => setView('lobby')}>
-            ← Back to Lobby
-          </Button>
-        </NavbarMenu>
-        <NavbarMenu align="center">
-          {currentContext && (
-            <div
-              style={{
-                display: 'flex',
-                gap: '1.5rem',
-                alignItems: 'center',
-                fontSize: '0.875rem',
-                color: '#9ca3af',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-              }}
-            >
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-              >
-                <Text size="sm" color="muted">
-                  Node:
-                </Text>
-                <Text
-                  size="sm"
-                  style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
-                >
-                  {currentContext.nodeUrl
-                    .replace('http://', '')
-                    .replace('https://', '')}
-                </Text>
-                <CopyToClipboard
-                  text={currentContext.nodeUrl}
-                  variant="icon"
-                  size="small"
-                  successMessage="Node URL copied!"
-                />
-              </div>
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-              >
-                <Text size="sm" color="muted">
-                  Context ID:
-                </Text>
-                <Text
-                  size="sm"
-                  style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
-                >
-                  {currentContext.contextId.slice(0, 8)}...
-                  {currentContext.contextId.slice(-8)}
+              <>
+                <Text size="sm" color="muted">Context:</Text>
+                <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                  {currentContext.contextId.slice(0, 8)}...{currentContext.contextId.slice(-8)}
                 </Text>
                 <CopyToClipboard
                   text={currentContext.contextId}
@@ -1027,54 +1017,472 @@ export default function MatchPage() {
                   size="small"
                   successMessage="Context ID copied!"
                 />
-              </div>
-              {currentUser && (
-                <div
+              </>
+            )}
+            {currentUser && (
+              <>
+                <Text size="sm" color="muted">Key:</Text>
+                <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                  {currentUser.slice(0, 8)}...{currentUser.slice(-8)}
+                </Text>
+                <CopyToClipboard
+                  text={currentUser}
+                  variant="icon"
+                  size="small"
+                  successMessage="Public Key copied!"
+                />
+              </>
+            )}
+          </div>
+        )}
+        {extra}
+      </NavbarMenu>
+      <NavbarMenu align="right">
+        {isAuthenticated ? (
+          <Menu variant="compact" size="md">
+            <MenuGroup>
+              {lobby.selectedLobby && view !== 'lobby-select' && (
+                <MenuItem onClick={() => {
+                  lobby.clearLobby();
+                  setView('lobby-select');
+                  setLobbyApi(null);
+                  setMatchApi(null);
+                  setMatchContextId(null);
+                  setMatchId('');
+                  setRuntimeMatchId(null);
+                  setCurrentContext(null);
+                  setMyMatches([]);
+                  setPlaced(false);
+                  setOwnBoard([]);
+                  setShotsBoard([]);
+                  setCurrentTurn(null);
+                  setIsMyTurn(false);
+                  setPendingShot(null);
+                  navigate('/lobby', { replace: true });
+                }}>
+                  Switch Namespace
+                </MenuItem>
+              )}
+              <MenuItem onClick={doLogout}>Logout</MenuItem>
+            </MenuGroup>
+          </Menu>
+        ) : (
+          <NavbarItem>
+            <Button variant="primary" onClick={() => connectToNode(defaultNodeUrl)}>
+              Connect
+            </Button>
+          </NavbarItem>
+        )}
+      </NavbarMenu>
+    </MeroNavbar>
+  );
+
+  const pageShell = (children: React.ReactNode) => (
+    <div style={{ minHeight: '100vh', backgroundColor: '#111111', color: 'white' }}>
+      <Grid columns={1} gap={32} maxWidth="100%" justify="center" align="center" style={{ minHeight: '100vh', padding: '2rem' }}>
+        <GridItem>
+          <main style={{ width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {children}
+          </main>
+        </GridItem>
+      </Grid>
+    </div>
+  );
+
+  // Lobby selection view
+  if (view === 'lobby-select') {
+    return (
+      <>
+        {renderNavbar()}
+        {pageShell(
+          <>
+            <Card variant="rounded">
+              <CardHeader>
+                <CardTitle>Your Namespaces</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {lobby.lobbiesLoading ? (
+                  <Text size="sm" color="muted">Loading namespaces...</Text>
+                ) : lobby.lobbies.length === 0 ? (
+                  <Text size="sm" color="muted">No namespaces yet. Create one below or join with an invitation.</Text>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {lobby.lobbies.map((l) => (
+                      <div
+                        key={l.namespaceId}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.75rem',
+                          backgroundColor: lobby.selectedLobby?.namespaceId === l.namespaceId ? '#1e3a5f' : '#1f2937',
+                          borderRadius: '0.5rem',
+                          border: lobby.selectedLobby?.namespaceId === l.namespaceId ? '1px solid #3b82f6' : '1px solid transparent',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => lobby.selectLobby(l.namespaceId)}
+                      >
+                        <div>
+                          <Text size="sm" style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                            {l.alias || l.namespaceId.slice(0, 16) + '...'}
+                          </Text>
+                          <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                            {l.namespaceId.slice(0, 8)}...{l.namespaceId.slice(-8)}
+                          </div>
+                        </div>
+                        <Button
+                          variant={lobby.selectedLobby?.namespaceId === l.namespaceId ? 'primary' : 'secondary'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            lobby.selectLobby(l.namespaceId);
+                          }}
+                        >
+                          {lobby.selectedLobby?.namespaceId === l.namespaceId ? 'Selected' : 'Select'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card variant="rounded">
+              <CardHeader>
+                <CardTitle>Create New Namespace</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleCreateLobby(); }}
+                  style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}
+                >
+                  <Input
+                    type="text"
+                    placeholder="Namespace name (optional)"
+                    value={newLobbyName}
+                    onChange={(e) => setNewLobbyName(e.target.value)}
+                  />
+                  <Button type="submit" variant="success" disabled={lobby.createLobbyLoading}>
+                    {lobby.createLobbyLoading ? 'Creating...' : 'Create'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card variant="rounded">
+              <CardHeader>
+                <CardTitle>Join Namespace via Invitation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleJoinLobby(); }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+                >
+                  <Input
+                    type="text"
+                    placeholder="Paste invitation JSON here"
+                    value={joinInvitationInput}
+                    onChange={(e) => setJoinInvitationInput(e.target.value)}
+                  />
+                  <Button type="submit" variant="primary">Join Namespace</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {lobby.selectedLobby && (
+              <Card variant="rounded">
+                <CardHeader>
+                  <CardTitle>Enter Namespace</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {lobby.groupLoading ? (
+                    <Text size="sm" color="muted">Resolving namespace context...</Text>
+                  ) : lobby.lobbyContextId ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {lobby.namespaceId && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Text size="sm" color="muted">Namespace:</Text>
+                          <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                            {lobby.namespaceId.slice(0, 8)}...{lobby.namespaceId.slice(-8)}
+                          </Text>
+                          <CopyToClipboard
+                            text={lobby.namespaceId}
+                            variant="icon"
+                            size="small"
+                            successMessage="Namespace ID copied!"
+                          />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Text size="sm" color="muted">Context:</Text>
+                        <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                          {lobby.lobbyContextId.slice(0, 8)}...{lobby.lobbyContextId.slice(-8)}
+                        </Text>
+                        <CopyToClipboard
+                          text={lobby.lobbyContextId}
+                          variant="icon"
+                          size="small"
+                          successMessage="Context ID copied!"
+                        />
+                      </div>
+                      {lobby.lobbyJoined ? (
+                        <Button variant="success" onClick={() => setView('lobby')}>
+                          Enter
+                        </Button>
+                      ) : (
+                        <Button variant="primary" onClick={handleEnterLobby} disabled={lobby.joinLoading}>
+                          {lobby.joinLoading ? 'Joining...' : 'Join & Enter'}
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <Text size="sm" color="muted">
+                        Select a namespace above to enter.
+                      </Text>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>,
+        )}
+      </>
+    );
+  }
+
+  // Lobby view
+  if (view === 'lobby') {
+    return (
+      <>
+        {renderNavbar()}
+        {pageShell(
+          <>
+            {lobby.selectedLobby && (
+              <Card variant="rounded">
+                <CardHeader>
+                  <CardTitle>
+                    Battleships Lobby
+                    {lobby.isAdmin && (
+                      <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 'normal' }}>
+                        Admin
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Text size="sm" color="muted">
+                        {lobby.members.length} member{lobby.members.length !== 1 ? 's' : ''}
+                      </Text>
+                      {lobby.selfIdentity && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <Text size="sm" color="muted">You:</Text>
+                          <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                            {lobby.selfIdentity.slice(0, 8)}...{lobby.selfIdentity.slice(-8)}
+                          </Text>
+                        </div>
+                      )}
+                    </div>
+
+                    {lobby.members.length > 0 && (
+                      <details>
+                        <summary style={{ cursor: 'pointer', color: '#9ca3af', fontSize: '0.875rem' }}>
+                          Members
+                        </summary>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem' }}>
+                          {lobby.members.map((m) => (
+                            <div key={m.identity} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.875rem' }}>
+                              <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                                {m.identity.slice(0, 12)}...{m.identity.slice(-8)}
+                              </Text>
+                              <span style={{
+                                fontSize: '0.7rem',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '4px',
+                                backgroundColor: m.role === 'Admin' ? '#f59e0b22' : '#374151',
+                                color: m.role === 'Admin' ? '#f59e0b' : '#9ca3af',
+                              }}>
+                                {m.role}
+                              </span>
+                              {m.identity === lobby.selfIdentity && (
+                                <span style={{ fontSize: '0.7rem', color: '#10b981' }}>(you)</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+
+                    {lobby.executorPublicKey && (
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <Button variant="secondary" onClick={handleCreateInvitation} disabled={lobby.inviteLoading}>
+                          {lobby.inviteLoading ? 'Creating...' : 'Invite Player'}
+                        </Button>
+                      </div>
+                    )}
+
+                    {invitationJson && (
+                      <div style={{ position: 'relative' }}>
+                        <pre style={{
+                          backgroundColor: '#1f2937',
+                          padding: '0.75rem',
+                          borderRadius: '0.5rem',
+                          fontSize: '0.75rem',
+                          overflowX: 'auto',
+                          maxHeight: '200px',
+                          color: '#e5e7eb',
+                        }}>
+                          {invitationJson}
+                        </pre>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <CopyToClipboard
+                            text={invitationJson}
+                            variant="button"
+                            size="small"
+                            successMessage="Invitation copied!"
+                          />
+                          <Button variant="secondary" onClick={() => setInvitationJson(null)}>
+                            Dismiss
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card variant="rounded">
+              <CardHeader>
+                <CardTitle>Create New Match</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    createMatch();
+                  }}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '1rem',
                   }}
                 >
-                  <Text size="sm" color="muted">
-                    Public Key:
-                  </Text>
-                  <Text
-                    size="sm"
-                    style={{ fontFamily: 'monospace', color: '#e5e7eb' }}
-                  >
-                    {currentUser.slice(0, 8)}...{currentUser.slice(-8)}
-                  </Text>
-                  <CopyToClipboard
-                    text={currentUser}
-                    variant="icon"
-                    size="small"
-                    successMessage="Public Key copied!"
+                  <Input
+                    type="text"
+                    placeholder="Player 2 public key (Base58)"
+                    value={player2}
+                    onChange={(e) => setPlayer2(e.target.value)}
                   />
-                </div>
-              )}
-            </div>
-          )}
-        </NavbarMenu>
-        <NavbarMenu align="right">
-          {isAuthenticated ? (
-            <Menu variant="compact" size="md">
-              <MenuGroup>
-                <MenuItem onClick={doLogout}>Logout</MenuItem>
-              </MenuGroup>
-            </Menu>
-          ) : (
-            <NavbarItem>
-              <CalimeroConnectButton
-                connectionType={{
-                  type: ConnectionType.Custom,
-                  url: 'http://node1.127.0.0.1.nip.io',
-                }}
-              />
-            </NavbarItem>
-          )}
-        </NavbarMenu>
-      </MeroNavbar>
+                  <Button type="submit" variant="success" disabled={creatingMatch}>
+                    {creatingMatch ? 'Creating...' : 'Create'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card variant="rounded">
+              <CardHeader>
+                <CardTitle>My Matches</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {myMatches.length === 0 ? (
+                  <div style={{ color: '#9ca3af' }}>
+                    No matches yet. Create one above!
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    {myMatches.map((m) => {
+                      const statusColor =
+                        m.status === 'Active' ? '#10b981'
+                        : m.status === 'Finished' ? '#6b7280'
+                        : '#f59e0b';
+                      const canOpen = m.status === 'Active' && !!m.context_id;
+                      return (
+                        <div
+                          key={m.match_id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '0.75rem',
+                            backgroundColor: '#1f2937',
+                            borderRadius: '0.5rem',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            <Text size="sm" style={{ fontFamily: 'monospace' }}>
+                              {m.match_id}
+                            </Text>
+                            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: '0.7rem',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '4px',
+                                backgroundColor: `${statusColor}22`,
+                                color: statusColor,
+                              }}>
+                                {m.status}
+                              </span>
+                              {m.winner && (
+                                <Text size="sm" color="muted" style={{ fontSize: '0.75rem' }}>
+                                  Winner: {m.winner.slice(0, 8)}...
+                                </Text>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            variant="primary"
+                            disabled={!canOpen}
+                            onClick={() => canOpen && openGame(m.match_id, m.context_id!)}
+                          >
+                            {canOpen ? 'Open' : m.status === 'Pending' ? 'Pending...' : 'Finished'}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>,
+        )}
+      </>
+    );
+  }
+
+  // Game view
+  return (
+    <>
+      {renderNavbar(
+        <Button variant="secondary" onClick={() => {
+          setMatchId('');
+          setRuntimeMatchId(null);
+          setMatchContextId(null);
+          setMatchApi(null);
+          setPlaced(false);
+          setOwnBoard([]);
+          setShotsBoard([]);
+          setCurrentTurn(null);
+          setIsMyTurn(false);
+          setPendingShot(null);
+          setSelectedShotX(null);
+          setSelectedShotY(null);
+          setGrid(Array.from({ length: 10 }, () => Array(10).fill(false)));
+          setShipCounts([0, 0, 0, 0]);
+          setView('lobby');
+          navigate('/lobby', { replace: true });
+        }}>
+          Back to Lobby
+        </Button>,
+      )}
       <div
         style={{
           minHeight: '100vh',
@@ -1102,7 +1510,7 @@ export default function MatchPage() {
             >
               <Card variant="rounded">
                 <CardHeader>
-                  <CardTitle>Match: {matchId}</CardTitle>
+                  <CardTitle>Match: {effectiveMatchId}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div
@@ -1110,11 +1518,26 @@ export default function MatchPage() {
                       display: 'flex',
                       gap: '1rem',
                       alignItems: 'center',
+                      flexWrap: 'wrap',
                     }}
                   >
                     <Text size="sm" color="muted">
                       Status: {placed ? 'Ships placed' : 'Place ships to start'}
                     </Text>
+                    {matchContextId && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Text size="sm" color="muted">Context:</Text>
+                        <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
+                          {matchContextId.slice(0, 8)}...{matchContextId.slice(-8)}
+                        </Text>
+                        <CopyToClipboard
+                          text={matchContextId}
+                          variant="icon"
+                          size="small"
+                          successMessage="Match context ID copied!"
+                        />
+                      </div>
+                    )}
                     <div
                       style={{
                         display: 'flex',
@@ -1241,7 +1664,7 @@ export default function MatchPage() {
                             {isRemovalMode
                               ? 'Click ships to remove them'
                               : selectedShip === null
-                                ? 'Click cells to toggle'
+                                ? 'Select a ship length to place'
                                 : `Click to place ship of length ${selectedShip + 2} (${isHorizontal ? 'horizontal' : 'vertical'})`}
                           </div>
                           {renderGrid('Click to place ships', true)}
@@ -1249,9 +1672,10 @@ export default function MatchPage() {
                             type="button"
                             variant="primary"
                             onClick={placeShips}
-                            disabled={shipCounts.some(
-                              (c, i) => c !== shipTargets[i],
-                            )}
+                            disabled={
+                              !matchApiReady ||
+                              shipCounts.some((c, i) => c !== shipTargets[i])
+                            }
                           >
                             Place Fleet
                           </Button>
@@ -1341,6 +1765,7 @@ export default function MatchPage() {
                               <Button
                                 variant="success"
                                 disabled={
+                                  !matchApiReady ||
                                   !isMyTurn ||
                                   selectedShotX === null ||
                                   selectedShotY === null
