@@ -67,6 +67,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm --dir app build
 
+      - name: Test
+        if: ${{ !cancelled() }}
+        run: pnpm --dir app test
+
   # ============================================================
   # Job 2: Logic — Rust Format, Clippy, WASM Build
   # ============================================================
