@@ -990,9 +990,9 @@ export default function MatchPage() {
       <NavbarMenu align="center">
         {lobby.selectedLobby && (
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', fontSize: '0.875rem', color: '#9ca3af' }}>
-            <Text size="sm" color="muted">Lobby:</Text>
+            <Text size="sm" color="muted">Namespace:</Text>
             <Text size="sm" style={{ fontFamily: 'monospace', color: '#e5e7eb' }}>
-              {lobby.selectedLobby?.alias || lobby.lobbyContextId?.slice(0, 12) + '...' || 'Unknown'}
+              {lobby.selectedLobby?.alias || lobby.namespaceId?.slice(0, 12) + '...' || 'Unknown'}
             </Text>
             {currentContext && (
               <>
@@ -1098,35 +1098,35 @@ export default function MatchPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     {lobby.lobbies.map((l) => (
                       <div
-                        key={l.contextId}
+                        key={l.namespaceId}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '0.75rem',
-                          backgroundColor: lobby.selectedLobby?.contextId === l.contextId ? '#1e3a5f' : '#1f2937',
+                          backgroundColor: lobby.selectedLobby?.namespaceId === l.namespaceId ? '#1e3a5f' : '#1f2937',
                           borderRadius: '0.5rem',
-                          border: lobby.selectedLobby?.contextId === l.contextId ? '1px solid #3b82f6' : '1px solid transparent',
+                          border: lobby.selectedLobby?.namespaceId === l.namespaceId ? '1px solid #3b82f6' : '1px solid transparent',
                           cursor: 'pointer',
                         }}
-                        onClick={() => lobby.selectLobby(l.contextId)}
+                        onClick={() => lobby.selectLobby(l.namespaceId)}
                       >
                         <div>
                           <Text size="sm" style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                            {l.alias || l.contextId.slice(0, 16) + '...'}
+                            {l.alias || l.namespaceId.slice(0, 16) + '...'}
                           </Text>
                           <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                            {l.contextId.slice(0, 8)}...{l.contextId.slice(-8)}
+                            {l.namespaceId.slice(0, 8)}...{l.namespaceId.slice(-8)}
                           </div>
                         </div>
                         <Button
-                          variant={lobby.selectedLobby?.contextId === l.contextId ? 'primary' : 'secondary'}
+                          variant={lobby.selectedLobby?.namespaceId === l.namespaceId ? 'primary' : 'secondary'}
                           onClick={(e) => {
                             e.stopPropagation();
-                            lobby.selectLobby(l.contextId);
+                            lobby.selectLobby(l.namespaceId);
                           }}
                         >
-                          {lobby.selectedLobby?.contextId === l.contextId ? 'Selected' : 'Select'}
+                          {lobby.selectedLobby?.namespaceId === l.namespaceId ? 'Selected' : 'Select'}
                         </Button>
                       </div>
                     ))}
