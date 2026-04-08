@@ -20,8 +20,6 @@ export interface ResolveAppContextOptions {
   contextIdentity?: string | null;
   /** The role of the context being resolved. */
   role?: ContextRole | null;
-  /** Group id used to scope context resolution. */
-  groupId?: string | null;
   /** Application id used to filter contexts when resolving a lobby. */
   applicationId?: string | null;
 }

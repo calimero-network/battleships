@@ -80,7 +80,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
   const { applicationId: authApplicationId, mero, contextIdentity } = useMero();
   const applicationId = authApplicationId || ENV_APPLICATION_ID;
 
-  // --- Namespace listing (replaces useContexts) ---
+  // --- Namespace listing ---
   const {
     namespaces,
     loading: namespacesLoading,

@@ -21,7 +21,6 @@ export interface CreateKvClientOptions {
   contextId?: string | null;
   contextIdentity?: string | null;
   role?: ContextRole | null;
-  groupId?: string | null;
   applicationId?: string | null;
 }
 
@@ -33,7 +32,6 @@ export async function createKvClient(
     targetContextId: options.contextId,
     contextIdentity: options.contextIdentity,
     role: options.role,
-    groupId: options.groupId,
     applicationId: options.applicationId,
   };
 
