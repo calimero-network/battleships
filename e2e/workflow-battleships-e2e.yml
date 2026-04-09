@@ -141,7 +141,6 @@ steps:
     type: wait
     seconds: 5
     message: Waiting for lobby state and governance to propagate
-    timeout: 30
 
   - name: Wait for Namespace Governance Propagation
     type: wait
