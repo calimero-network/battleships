@@ -185,13 +185,6 @@
   },
   "methods": [
     {
-      "name": "new",
-      "params": [],
-      "returns": {
-        "$ref": "PlayerStats"
-      }
-    },
-    {
       "name": "init",
       "params": [],
       "returns": {

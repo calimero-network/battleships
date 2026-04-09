@@ -174,14 +174,6 @@ export class LobbyClient {
   }
 
   /**
-   * new
-   */
-  public async new(): Promise<PlayerStats> {
-    const response = await this.mero.rpc.execute({ contextId: this.contextId, method: 'new', argsJson: {}, executorPublicKey: this.executorPublicKey });
-    return response as PlayerStats;
-  }
-
-  /**
    * init
    */
   public async init(): Promise<void> {

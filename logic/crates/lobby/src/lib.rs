@@ -50,7 +50,7 @@ impl Default for PlayerStats {
 }
 
 impl PlayerStats {
-    pub fn new() -> PlayerStats {
+    fn new() -> PlayerStats {
         PlayerStats {
             matches_played: 0,
             wins: 0,
