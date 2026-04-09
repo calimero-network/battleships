@@ -41,7 +41,7 @@ export interface MatchSummary {
   match_id: string;
   player1: string;
   player2: string;
-  status: MatchStatus;
+  status: 'Pending' | 'Active' | 'Finished';
   context_id: string | null;
   winner: string | null;
 }
