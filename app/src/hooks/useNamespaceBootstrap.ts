@@ -31,7 +31,10 @@ export function useNamespaceBootstrap(
 
   const createNamespaceWithLobby = useCallback(
     async (alias?: string): Promise<NamespaceBootstrapResult | null> => {
-      if (!mero || !applicationId) return null;
+      if (!mero || !applicationId) {
+        console.warn('[useNamespaceBootstrap] bailing:', { mero: !!mero, applicationId });
+        return null;
+      }
 
       setLoading(true);
       setError(null);
@@ -56,6 +59,7 @@ export function useNamespaceBootstrap(
           applicationId,
           groupId: namespaceId,
           serviceName: 'lobby',
+          initializationParams: [],
         });
 
         return {
