@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battleships — Architecture</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="main">
+<div class="content">
+
+<div class="hero">
+<h1>Battleships on <em>Calimero</em></h1>
+<p class="page-subtitle">A multi-service P2P battleship game using namespaces, private storage, and CRDT-based state sync</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Overview -->
+<!-- ============================================================ -->
+
+<div class="card ga">
+<h2>How It Works</h2>
+<p>Battleships is a two-player turn-based game built on <strong>Calimero</strong>. Each game runs across two nodes that sync state automatically via CRDTs. Ship placements are stored privately so your opponent can't see them until they're hit.</p>
+<p>The app demonstrates four core Calimero concepts: <strong>namespaces</strong> for identity and access control, <strong>multi-service bundles</strong> for separating lobby and game logic, <strong>private storage</strong> for hidden ship boards, and <strong>cross-context calls (xcall)</strong> for notifying the lobby when a game ends.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Namespace Model -->
+<!-- ============================================================ -->
+
+<div class="card gc">
+<h2>Namespaces &amp; Access Control</h2>
+<p>A <strong>namespace</strong> is a root group that scopes identity, governance, and application instances. Each battleships lobby is a namespace.</p>
+
+<h3>Hierarchy</h3>
+<div class="typedef" aria-label="Namespace hierarchy">
+<span class="kw">namespace</span> <span class="ty">(root group)</span><br>
+&nbsp;&nbsp;<span class="comment">// All players join here</span><br>
+&nbsp;&nbsp;<span class="comment">// Per-node Ed25519 identity (auto-generated)</span><br>
+&nbsp;&nbsp;<span class="comment">// Application binding (battleships bundle)</span><br>
+<br>
+&nbsp;&nbsp;<span class="field">lobby context</span> &mdash; <span class="ty">lobby service</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">// Matchmaking, player stats, match history</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">// All namespace members can access</span><br>
+<br>
+&nbsp;&nbsp;<span class="field">match subgroup A</span> &mdash; <span class="comment">Player 1 + Player 2 only</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">match context</span> &mdash; <span class="ty">game service</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment">// Private boards, shots, turn state</span><br>
+<br>
+&nbsp;&nbsp;<span class="field">match subgroup B</span> &mdash; <span class="comment">Player 3 + Player 4 only</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">match context</span> &mdash; <span class="ty">game service</span><br>
+</div>
+
+<h3>Capability Configuration</h3>
+<p>When the namespace is created, <strong>default capabilities</strong> are set so every new member inherits:</p>
+<div class="g3">
+<div class="cb"><h4 style="color:var(--green);">CAN_CREATE_CONTEXT</h4><p>Bit 0. Players can create match contexts inside subgroups.</p></div>
+<div class="cb"><h4 style="color:var(--blue);">CAN_INVITE_MEMBERS</h4><p>Bit 1. Players can invite others to the namespace.</p></div>
+<div class="cb"><h4 style="color:var(--orange);">MANAGE_MEMBERS</h4><p>Bit 3. Players can add opponents to match subgroups.</p></div>
+</div>
+<p style="margin-top:12px;font-size:.82rem;color:var(--text-dim);">Default capability bitmask: <code class="code">CAN_CREATE_CONTEXT | CAN_INVITE_MEMBERS | MANAGE_MEMBERS = 11</code></p>
+
+<h3>Match Isolation via Subgroups</h3>
+<p>Each match creates a <strong>subgroup</strong> nested under the namespace. Only the two players are added. The match context lives inside this subgroup, so only they can execute against it. Namespace admins inherit access for moderation.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Multi-Service Bundle -->
+<!-- ============================================================ -->
+
+<div class="card gb">
+<h2>Multi-Service Bundle</h2>
+<p>The battleships <code class="code">.mpk</code> bundle contains two WASM services. Each context specifies which service to run via <code class="code">service_name</code> at creation time.</p>
+
+<div class="g2">
+<div>
+<h3>Lobby Service</h3>
+<div class="typedef">
+<span class="kw">struct</span> <span class="ty">LobbyState</span> {<br>
+&nbsp;&nbsp;<span class="field">id_nonce</span>: <span class="ty">u64</span>,<br>
+&nbsp;&nbsp;<span class="field">created_ms</span>: <span class="ty">u64</span>,<br>
+&nbsp;&nbsp;<span class="field">matches</span>: <span class="ty">Vec&lt;MatchSummary&gt;</span>,<br>
+&nbsp;&nbsp;<span class="field">player_stats</span>: <span class="ty">Vec&lt;PlayerStatsEntry&gt;</span>,<br>
+&nbsp;&nbsp;<span class="field">history</span>: <span class="ty">Vec&lt;MatchRecord&gt;</span>,<br>
+}
+</div>
+<p style="margin-top:8px;font-size:.82rem;">6 methods: <code class="code">create_match</code>, <code class="code">set_match_context_id</code>, <code class="code">get_matches</code>, <code class="code">get_player_stats</code>, <code class="code">get_history</code>, <code class="code">on_match_finished</code></p>
+<p style="font-size:.82rem;">3 events: MatchCreated, MatchListUpdated, PlayerStatsUpdated</p>
+</div>
+<div>
+<h3>Game Service</h3>
+<div class="typedef">
+<span class="kw">struct</span> <span class="ty">GameState</span> {<br>
+&nbsp;&nbsp;<span class="field">lobby_context_id</span>: <span class="ty">Option&lt;String&gt;</span>,<br>
+&nbsp;&nbsp;<span class="field">active_match</span>: <span class="ty">Option&lt;Match&gt;</span>,<br>
+}
+</div>
+<p style="margin-top:8px;font-size:.82rem;">9 methods: <code class="code">place_ships</code>, <code class="code">propose_shot</code>, <code class="code">acknowledge_shot</code>, <code class="code">get_own_board</code>, <code class="code">get_shots</code>, <code class="code">get_active_match_id</code>, <code class="code">get_current_turn</code>, <code class="code">get_current_user</code>, <code class="code">acknowledge_shot_handler</code></p>
+<p style="font-size:.82rem;">5 events: ShipsPlaced, ShotProposed, ShotFired, Winner, MatchEnded</p>
+</div>
+</div>
+
+<h3>Bundle Structure</h3>
+<div class="typedef" aria-label="Bundle contents">
+<span class="comment">// battleships-0.3.0.mpk</span><br>
+<span class="field">manifest.json</span> &mdash; <span class="comment">multi-service manifest with services array</span><br>
+<span class="field">lobby.wasm</span> &mdash; <span class="ty">lobby service</span> <span class="comment">(matchmaking, stats)</span><br>
+<span class="field">game.wasm</span> &mdash; <span class="ty">game service</span> <span class="comment">(gameplay, private boards)</span><br>
+<span class="field">lobby-abi.json</span> &mdash; <span class="comment">ABI for LobbyClient codegen</span><br>
+<span class="field">game-abi.json</span> &mdash; <span class="comment">ABI for GameClient codegen</span><br>
+</div>
+
+<h3>Shared Types Crate</h3>
+<p>Both services share <code class="code">GameError</code> and <code class="code">PublicKey</code> via a <code class="code">battleships-types</code> crate. This crate has no calimero-sdk dependency &mdash; only borsh, serde, thiserror, and bs58.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Private Storage -->
+<!-- ============================================================ -->
+
+<div class="card gc">
+<h2>Private Storage</h2>
+<p>Ship placements are the core secret in battleships. Each player's board is stored using Calimero's <strong>private storage</strong> system, which is NOT replicated between nodes.</p>
+
+<div class="typedef">
+<span class="kw">#[calimero_sdk::app::private]</span><br>
+<span class="kw">struct</span> <span class="ty">PrivateBoards</span> {<br>
+&nbsp;&nbsp;<span class="field">boards</span>: <span class="ty">UnorderedMap&lt;String, PlayerBoard&gt;</span>,<br>
+}<br>
+<br>
+<span class="kw">struct</span> <span class="ty">PlayerBoard</span> {<br>
+&nbsp;&nbsp;<span class="field">own</span>: <span class="ty">Board</span>, <span class="comment">// 10x10 grid with ship positions</span><br>
+&nbsp;&nbsp;<span class="field">ships</span>: <span class="ty">u64</span>, <span class="comment">// remaining ship cells</span><br>
+&nbsp;&nbsp;<span class="field">placed</span>: <span class="ty">bool</span>,<br>
+}
+</div>
+
+<h3>What&rsquo;s private vs shared</h3>
+<div class="g2">
+<div>
+<h4 style="color:var(--red);">Private (per-node, not synced)</h4>
+<ul>
+<li>Ship coordinates and board layout</li>
+<li>Remaining ship cell count</li>
+<li>Placement status per player</li>
+</ul>
+</div>
+<div>
+<h4 style="color:var(--green);">Shared (CRDT-synced)</h4>
+<ul>
+<li>Match state (whose turn, pending shots)</li>
+<li>Shot boards (hit/miss results)</li>
+<li>Winner determination</li>
+<li><code class="code">placed_p1</code> / <code class="code">placed_p2</code> flags</li>
+</ul>
+</div>
+</div>
+
+<p style="margin-top:12px;">When a shot is proposed, the <strong>target player's node</strong> resolves it against their private board and publishes only the result (hit/miss). The opponent never sees ship positions until they&rsquo;re hit.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Cross-Context Calls (xcall) -->
+<!-- ============================================================ -->
+
+<div class="card ga">
+<h2>Cross-Context Calls (xcall)</h2>
+<p>When a game ends (all ships sunk), the <strong>game context</strong> notifies the <strong>lobby context</strong> to update stats and history. This uses Calimero&rsquo;s <code class="code">xcall</code> &mdash; a stringly-typed cross-context function call.</p>
+
+<div class="typedef">
+<span class="comment">// In game service &mdash; acknowledge_shot, after winner determined</span><br>
+<span class="kw">calimero_sdk::env::xcall</span>(<br>
+&nbsp;&nbsp;&amp;lobby_context_id, <span class="comment">// target context (lobby)</span><br>
+&nbsp;&nbsp;<span class="field">"on_match_finished"</span>, <span class="comment">// method name</span><br>
+&nbsp;&nbsp;&amp;json!({ <span class="field">"match_id"</span>, <span class="field">"winner"</span>, <span class="field">"loser"</span> }),<br>
+);
+</div>
+
+<p>This works across services because xcall targets a <strong>context</strong> (by ID), and the lobby context runs the lobby service which has <code class="code">on_match_finished</code>. The method name and JSON params are the only contract between the two services.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Game Flow -->
+<!-- ============================================================ -->
+
+<div class="card gb">
+<h2>Complete Game Flow</h2>
+
+<div class="fr"><div class="fp">1. Create Namespace</div><div class="fd">Host creates a namespace with the battleships app, sets default capabilities (bits 0+1+3 = 11)</div></div>
+<div class="fr"><div class="fp">2. Create Lobby</div><div class="fd">Lobby context created in namespace root group with <code class="code">service_name: lobby</code></div></div>
+<div class="fr"><div class="fp">3. Invite Player</div><div class="fd">Recursive namespace invitation &mdash; covers root + all subgroups</div></div>
+<div class="fr"><div class="fp">4. Player Joins</div><div class="fd"><code class="code">joinNamespace</code> &rarr; auto-gets namespace identity &rarr; joins lobby context</div></div>
+<div class="fr"><div class="fp">5. Create Match</div><div class="fd">Lobby contract allocates match ID, then: create subgroup &rarr; add player2 &rarr; create game context with <code class="code">service_name: game</code></div></div>
+<div class="fr"><div class="fp">6. Place Ships</div><div class="fd">Both players place ships &mdash; stored in <strong>private storage</strong>, <code class="code">placed_p1</code>/<code class="code">placed_p2</code> flags synced</div></div>
+<div class="fr"><div class="fp">7. Take Turns</div><div class="fd"><code class="code">propose_shot</code> &rarr; event triggers <code class="code">acknowledge_shot_handler</code> on target node &rarr; resolves against private board &rarr; result synced</div></div>
+<div class="fr"><div class="fp">8. Game Ends</div><div class="fd">All ships sunk &rarr; winner set &rarr; <code class="code">xcall</code> to lobby &rarr; stats/history updated</div></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CRDT State Sync -->
+<!-- ============================================================ -->
+
+<div class="card gc">
+<h2>CRDT State Sync</h2>
+<p>All shared state replicates automatically between nodes using Calimero&rsquo;s CRDT-based sync. Each mutation creates a <strong>delta</strong> that&rsquo;s broadcast via gossipsub and applied on peer nodes.</p>
+
+<div class="g3">
+<div class="cb"><h4 style="color:var(--green);">DAG-based</h4><p>Deltas form a causal DAG. Concurrent writes merge automatically.</p></div>
+<div class="cb"><h4 style="color:var(--blue);">Encrypted</h4><p>Deltas are encrypted with the group&rsquo;s shared key before broadcast.</p></div>
+<div class="cb"><h4 style="color:var(--orange);">Eventual</h4><p>Nodes converge to the same root hash. No central coordinator.</p></div>
+</div>
+
+<p style="margin-top:12px;">The sync layer is service-aware: when applying a delta from a peer, the node loads the correct WASM service (lobby or game) based on the context&rsquo;s <code class="code">service_name</code> to execute <code class="code">__calimero_sync_next</code>.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- Project Structure -->
+<!-- ============================================================ -->
+
+<div class="card ga">
+<h2>Project Structure</h2>
+<div class="typedef" aria-label="Directory layout">
+<span class="field">battleships/</span><br>
+&nbsp;&nbsp;<span class="field">app/</span> <span class="comment">&mdash; React + TypeScript frontend</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">src/hooks/</span> <span class="comment">&mdash; useBattleshipsLobby, useNamespaceBootstrap, useGameSubscriptions</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">src/api/lobby/</span> <span class="comment">&mdash; LobbyClient (codegen from lobby-abi.json)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">src/api/game/</span> <span class="comment">&mdash; GameClient (codegen from game-abi.json)</span><br>
+&nbsp;&nbsp;<span class="field">logic/</span> <span class="comment">&mdash; Cargo workspace (3 crates)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">crates/types/</span> <span class="comment">&mdash; GameError, PublicKey (shared, no SDK dep)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">crates/lobby/</span> <span class="comment">&mdash; LobbyState + 6 methods (cdylib &rarr; lobby.wasm)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">crates/game/</span> <span class="comment">&mdash; GameState + 9 methods (cdylib &rarr; game.wasm)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="field">build-bundle.sh</span> <span class="comment">&mdash; builds both + packages .mpk</span><br>
+&nbsp;&nbsp;<span class="field">e2e/</span> <span class="comment">&mdash; merobox e2e workflow</span><br>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Platform Features -->
+<!-- ============================================================ -->
+
+<div class="card gb">
+<h2>Calimero Platform Features Used</h2>
+<div class="g3">
+<div class="cb"><h4 style="color:var(--accent);">Namespaces</h4><p>Identity scoping, recursive invitations, subgroup-based access control</p></div>
+<div class="cb"><h4 style="color:var(--blue);">Multi-Service Bundles</h4><p>Two WASM services in one .mpk, service_name-based context creation</p></div>
+<div class="cb"><h4 style="color:var(--violet);">Private Storage</h4><p>#[app::private] for ship boards &mdash; never replicated between nodes</p></div>
+<div class="cb"><h4 style="color:var(--green);">CRDT Sync</h4><p>Automatic state replication with DAG-based causal ordering</p></div>
+<div class="cb"><h4 style="color:var(--orange);">xcall</h4><p>Cross-context calls from game &rarr; lobby for match results</p></div>
+<div class="cb"><h4 style="color:var(--cyan);">Event System</h4><p>app::emit! for real-time UI updates via SSE subscriptions</p></div>
+<div class="cb"><h4 style="color:var(--pink);">Capabilities</h4><p>Fine-grained permission bits for member actions</p></div>
+<div class="cb"><h4 style="color:var(--amber);">Governance DAG</h4><p>Membership, roles, and context registration via signed ops</p></div>
+<div class="cb"><h4 style="color:var(--red);">Subgroups</h4><p>Per-match access isolation &mdash; only 2 players per match group</p></div>
+</div>
+</div>
+
+</div>
+</div>
+</body>
+</html>
