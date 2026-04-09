@@ -20,7 +20,7 @@ steps:
   - name: Install Battleships App on Node 1
     type: install_application
     node: calimero-node-1
-    path: ../logic/res/battleships-0.2.5.mpk
+    path: ../logic/res/battleships-0.3.0.mpk
     dev: true
     outputs:
       app_id: applicationId
@@ -37,7 +37,7 @@ steps:
     node: calimero-node-1
     application_id: '{{app_id}}'
     group_id: '{{namespace_id}}'
-    params: '{"context_type":"Lobby"}'
+    service_name: lobby
     outputs:
       lobby_ctx_id: contextId
       p1_key: memberPublicKey
@@ -57,7 +57,7 @@ steps:
 
   - name: Wait for Namespace Gossip Propagation
     type: wait
-    seconds: 5
+    seconds: 10
     message: Waiting for namespace gossip to reach node 2
 
   - name: Node 2 Joins Namespace
@@ -115,7 +115,8 @@ steps:
     node: calimero-node-1
     application_id: '{{app_id}}'
     group_id: '{{namespace_id}}'
-    params: '{"context_type":"Match","player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
+    service_name: game
+    params: '{"player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
     outputs:
       match_ctx_id: contextId
       match_p1_key: memberPublicKey
@@ -135,16 +136,11 @@ steps:
       match_id: '{{match_id}}'
       context_id: '{{match_ctx_id}}'
 
-  # The match context's group registration propagates via namespace governance.
-  # Ensure lobby context is synced first (same namespace), then wait for
-  # governance ops to be applied on node-2 before attempting join.
-  - name: Wait for Lobby Sync After Match Creation
-    type: wait_for_sync
-    nodes:
-      - calimero-node-1
-      - calimero-node-2
-    context_id: '{{lobby_ctx_id}}'
-    timeout: 30
+  # Wait for namespace governance + lobby state to propagate before node-2 joins match
+  - name: Wait for Lobby and Governance Propagation
+    type: wait
+    seconds: 10
+    message: Waiting for lobby state and governance to propagate
 
   - name: Wait for Namespace Governance Propagation
     type: wait
@@ -171,10 +167,10 @@ steps:
   # Phase C: Gameplay — Ship Placement
   # ============================================================
 
-  - name: Wait for Match Init State to Settle
+  - name: Wait for Gossipsub Mesh Formation
     type: wait
-    seconds: 3
-    message: Waiting for match context init state to settle
+    seconds: 10
+    message: Waiting for gossipsub mesh to form on match context topic between nodes
 
   # The match context generates its own match_id during init (different from the lobby's).
   - name: Get Active Match ID from Match Context

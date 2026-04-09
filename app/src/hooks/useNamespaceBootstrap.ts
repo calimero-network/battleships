@@ -52,13 +52,10 @@ export function useNamespaceBootstrap(
         });
 
         // 3. Create the lobby context inside the namespace root group
-        const lobbyInit = JSON.stringify({ context_type: 'Lobby' });
-        const initBytes = Array.from(new TextEncoder().encode(lobbyInit));
-
         const ctx = await mero.admin.createContext({
           applicationId,
           groupId: namespaceId,
-          initializationParams: initBytes,
+          serviceName: 'lobby',
         });
 
         return {

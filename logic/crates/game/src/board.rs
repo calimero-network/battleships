@@ -36,7 +36,7 @@
 //! assert_eq!(cell, Cell::Ship);
 //! ```
 
-use crate::GameError;
+use battleships_types::GameError;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
 

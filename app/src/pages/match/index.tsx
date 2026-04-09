@@ -23,9 +23,9 @@ import {
 import {
   useMero,
 } from '@calimero-network/mero-react';
-import { createKvClient, AbiClient } from '../../features/kv/api';
+import { createLobbyClient, createGameClient, LobbyClient, GameClient } from '../../features/kv/api';
 import type { ContextRole } from '../../features/kv/api';
-import type { MatchSummary } from '../../api/AbiClient';
+import type { MatchSummary } from '../../api/lobby/LobbyClient';
 import type { AllGameEvents } from '../../types/events';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 import { useBattleshipsLobby } from '../../hooks/useBattleshipsLobby';
@@ -57,7 +57,7 @@ export default function MatchPage() {
   const [joinInvitationInput, setJoinInvitationInput] = useState('');
 
   // Lobby API and context
-  const [lobbyApi, setLobbyApi] = useState<AbiClient | null>(null);
+  const [lobbyApi, setLobbyApi] = useState<LobbyClient | null>(null);
   const [currentContext, setCurrentContext] = useState<{
     applicationId: string;
     contextId: string;
@@ -65,7 +65,7 @@ export default function MatchPage() {
   } | null>(null);
 
   // Match API client (targets the per-game Match context)
-  const [matchApi, setMatchApi] = useState<AbiClient | null>(null);
+  const [matchApi, setMatchApi] = useState<GameClient | null>(null);
   const [matchContextId, setMatchContextId] = useState<string | null>(null);
 
   // Match management
@@ -124,7 +124,7 @@ export default function MatchPage() {
   };
 
   const ensureMatchContextReady = useCallback(
-    async (client: AbiClient, attempts = 10, delayMs = 400): Promise<void> => {
+    async (client: GameClient, attempts = 10, delayMs = 400): Promise<void> => {
       for (let attempt = 0; attempt < attempts; attempt += 1) {
         try {
           await client.getActiveMatchId();
@@ -274,7 +274,7 @@ export default function MatchPage() {
 
     (async () => {
       try {
-        const { client, context } = await createKvClient(mero, {
+        const { client, context } = await createLobbyClient(mero, {
           contextId: lobby.lobbyContextId,
           contextIdentity: executorKey,
           role: 'lobby' as ContextRole,
@@ -322,7 +322,7 @@ export default function MatchPage() {
 
     (async () => {
       try {
-        const { client } = await createKvClient(mero, {
+        const { client } = await createGameClient(mero, {
           contextId: matchContextId,
           contextIdentity: executorKey,
           role: 'match' as ContextRole,
@@ -341,7 +341,7 @@ export default function MatchPage() {
         if (missingContextLocally && lobby.groupId) {
           try {
             await mero.admin.joinContext(matchContextId);
-            const { client } = await createKvClient(mero, {
+            const { client } = await createGameClient(mero, {
               contextId: matchContextId,
               contextIdentity: executorKey,
               role: 'match' as ContextRole,
@@ -430,10 +430,9 @@ export default function MatchPage() {
         members: [{ identity: player2, role: 'Member' }],
       });
 
-      // 4. Create the Match context inside the subgroup
+      // 4. Create the Match context inside the subgroup (game service)
       const executorKey = lobby.executorPublicKey ?? contextIdentity;
       const initParams = JSON.stringify({
-        context_type: 'Match',
         player1: executorKey,
         player2,
         lobby_context_id: currentContext.contextId,
@@ -444,6 +443,7 @@ export default function MatchPage() {
         applicationId: currentContext.applicationId,
         initializationParams: initBytes,
         groupId: matchSubgroupId,
+        serviceName: 'game',
       });
 
       // 5. Link the Match context back into the Lobby

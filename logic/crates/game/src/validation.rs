@@ -44,7 +44,7 @@
 //! ### Extending with New Validation Strategies
 //! ```rust
 //! use crate::validation::ValidationStrategy;
-//! use crate::GameError;
+//! use battleships_types::GameError;
 //!
 //! struct CustomValidationStrategy {
 //!     min_length: u8,
@@ -81,7 +81,7 @@
 //! - **Open/Closed Principle**: Open for extension, closed for modification
 
 use crate::board::{Board, Cell, Coordinate, BOARD_SIZE};
-use crate::GameError;
+use battleships_types::GameError;
 
 // ============================================================================
 // VALIDATION STRATEGY PATTERN
@@ -95,7 +95,7 @@ use crate::GameError;
 /// # Example
 /// ```rust
 /// use crate::validation::{ValidationStrategy, ValidationInput};
-/// use crate::GameError;
+/// use battleships_types::GameError;
 ///
 /// struct MyCustomStrategy;
 ///

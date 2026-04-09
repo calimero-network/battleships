@@ -1,21 +1,15 @@
-[package]
-name = "battleships"
-description = "Calimero Battleships application"
-version = "0.2.5"
-edition = "2021"
+[workspace]
+members = ["crates/types", "crates/lobby", "crates/game"]
+resolver = "2"
 
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-thiserror = "1.0.56"
+[workspace.dependencies]
 calimero-sdk = { git = "https://github.com/calimero-network/core", branch = "master" }
 calimero-storage = { git = "https://github.com/calimero-network/core", branch = "master" }
-bs58 = "0.4"
-
-[build-dependencies]
 calimero-wasm-abi = { git = "https://github.com/calimero-network/core", branch = "master" }
+thiserror = "1.0.56"
+bs58 = "0.4"
 serde_json = "1.0.113"
+battleships-types = { path = "crates/types" }
 
 [profile.app-release]
 inherits = "release"

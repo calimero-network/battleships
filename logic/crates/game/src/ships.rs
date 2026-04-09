@@ -56,7 +56,7 @@
 
 use crate::board::{Board, Coordinate};
 use crate::validation::{validate_fleet_composition, validate_ship_placement};
-use crate::GameError;
+use battleships_types::GameError;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
 

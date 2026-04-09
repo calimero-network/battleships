@@ -45,66 +45,10 @@
 use crate::board::{Board, Cell, BOARD_SIZE};
 use crate::ships::ShipValidator;
 use crate::validation::validate_fleet_composition;
-use crate::GameError;
-use bs58;
+use battleships_types::GameError;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
 use calimero_storage::collections::UnorderedMap;
-
-// ============================================================================
-// PLAYERS MODULE - Everything related to player management and boards
-// ============================================================================
-
-/// Represents a player's public key for identification
-///
-/// Public keys are used to uniquely identify players in the game. They can be
-/// created from the Calimero executor ID or from Base58-encoded strings.
-/// The key is stored as a 32-byte array for efficient comparison and storage.
-///
-/// # Fields
-/// * `0` - 32-byte array representing the public key
-///
-/// # Example
-/// ```rust
-/// use battleship::players::PublicKey;
-///
-/// let key = PublicKey::from_executor_id()?;
-/// let encoded = key.to_base58();
-/// let decoded = PublicKey::from_base58(&encoded)?;
-/// assert_eq!(key, decoded);
-/// ```
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialEq, Eq)]
-#[borsh(crate = "calimero_sdk::borsh")]
-#[serde(crate = "calimero_sdk::serde")]
-pub struct PublicKey(pub [u8; 32]);
-
-impl PublicKey {
-    pub fn from_executor_id() -> Result<PublicKey, GameError> {
-        let v = calimero_sdk::env::executor_id();
-        if v.len() != 32 {
-            return Err(GameError::Invalid("executor id length"));
-        }
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&v);
-        Ok(PublicKey(arr))
-    }
-
-    pub fn from_base58(encoded: &str) -> Result<PublicKey, GameError> {
-        let decoded = bs58::decode(encoded)
-            .into_vec()
-            .map_err(|_| GameError::Invalid("bad base58 key"))?;
-        if decoded.len() != 32 {
-            return Err(GameError::Invalid("key length"));
-        }
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&decoded);
-        Ok(PublicKey(arr))
-    }
-
-    pub fn to_base58(&self) -> String {
-        bs58::encode(&self.0).into_string()
-    }
-}
 
 /// Represents a player's private board and ship data
 ///

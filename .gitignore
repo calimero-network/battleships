@@ -115,3 +115,6 @@ data/*.wasm
 # Bundle build artifacts
 logic/res/bundle-temp/
 # logic/res/*.mpk  # tracked for CI e2e tests
+data/
+e2e/data/
+logic/data/

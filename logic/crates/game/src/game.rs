@@ -48,8 +48,9 @@
 //! ```
 
 use crate::board::{Board, Cell, BOARD_SIZE};
-use crate::players::{PlayerBoard, PublicKey};
-use crate::GameError;
+use crate::players::PlayerBoard;
+use battleships_types::GameError;
+use battleships_types::PublicKey;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
 
