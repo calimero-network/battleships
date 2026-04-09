@@ -297,7 +297,11 @@ mod tests {
 
     #[test]
     fn match_status_borsh_roundtrip() {
-        for status in [MatchStatus::Pending, MatchStatus::Active, MatchStatus::Finished] {
+        for status in [
+            MatchStatus::Pending,
+            MatchStatus::Active,
+            MatchStatus::Finished,
+        ] {
             let bytes = borsh::to_vec(&status).unwrap();
             let decoded: MatchStatus = borsh::from_slice(&bytes).unwrap();
             assert_eq!(decoded, status);
@@ -330,7 +334,11 @@ mod tests {
             context_id: None,
             winner: None,
         });
-        let summary = state.matches.iter_mut().find(|m| m.match_id == "match-200-1").unwrap();
+        let summary = state
+            .matches
+            .iter_mut()
+            .find(|m| m.match_id == "match-200-1")
+            .unwrap();
         summary.context_id = Some("ctx-abc".into());
         summary.status = MatchStatus::Active;
         assert_eq!(state.matches[0].status, MatchStatus::Active);
@@ -368,7 +376,11 @@ mod tests {
         let mut state = make_lobby();
         state.player_stats.push(PlayerStatsEntry {
             player: "bob".into(),
-            stats: PlayerStats { matches_played: 5, wins: 3, losses: 2 },
+            stats: PlayerStats {
+                matches_played: 5,
+                wins: 3,
+                losses: 2,
+            },
         });
         let stats = state.find_or_create_stats("bob");
         stats.wins += 1;
@@ -411,7 +423,11 @@ mod tests {
                 context_id: Some(format!("ctx-{i}")),
                 winner: None,
             });
-            let summary = state.matches.iter_mut().find(|m| m.match_id == mid).unwrap();
+            let summary = state
+                .matches
+                .iter_mut()
+                .find(|m| m.match_id == mid)
+                .unwrap();
             summary.status = MatchStatus::Finished;
             summary.winner = Some("alice".into());
             {
@@ -431,9 +447,17 @@ mod tests {
                 finished_ms: (i + 1) as u64 * 1000,
             });
         }
-        let alice = state.player_stats.iter().find(|e| e.player == "alice").unwrap();
+        let alice = state
+            .player_stats
+            .iter()
+            .find(|e| e.player == "alice")
+            .unwrap();
         assert_eq!(alice.stats.wins, 3);
-        let bob = state.player_stats.iter().find(|e| e.player == "bob").unwrap();
+        let bob = state
+            .player_stats
+            .iter()
+            .find(|e| e.player == "bob")
+            .unwrap();
         assert_eq!(bob.stats.losses, 3);
         assert_eq!(state.history.len(), 3);
     }

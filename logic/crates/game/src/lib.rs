@@ -67,11 +67,7 @@ pub struct GameState {
 #[app::logic]
 impl GameState {
     #[app::init]
-    pub fn init(
-        player1: String,
-        player2: String,
-        lobby_context_id: Option<String>,
-    ) -> GameState {
+    pub fn init(player1: String, player2: String, lobby_context_id: Option<String>) -> GameState {
         let mut state = GameState {
             lobby_context_id,
             active_match: None,
