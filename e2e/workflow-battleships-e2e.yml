@@ -139,12 +139,12 @@ steps:
   # Wait for namespace governance + lobby state to propagate before node-2 joins match
   - name: Wait for Lobby and Governance Propagation
     type: wait
-    seconds: 5
+    seconds: 10
     message: Waiting for lobby state and governance to propagate
 
   - name: Wait for Namespace Governance Propagation
     type: wait
-    seconds: 5
+    seconds: 10
     message: Waiting for match context group registration to propagate to node 2
 
   - name: Node 2 Joins Match Context
@@ -169,7 +169,7 @@ steps:
 
   - name: Wait for Gossipsub Mesh Formation
     type: wait
-    seconds: 5
+    seconds: 10
     message: Waiting for gossipsub mesh to form on match context topic between nodes
 
   # The match context generates its own match_id during init (different from the lobby's).
