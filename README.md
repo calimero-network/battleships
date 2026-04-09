@@ -1,252 +1,127 @@
-# Battleship Game on Calimero
+# Battleships on Calimero
 
-A complete implementation of the classic Battleship game built on the Calimero SDK, featuring a modern React frontend and a well-architected Rust backend with comprehensive documentation.
+A two-player P2P battleship game built on [Calimero](https://calimero.network), using namespaces, multi-service bundles, private storage, and CRDT-based state sync.
 
-## 🎮 Game Features
+**[View Architecture Docs](https://calimero-network.github.io/battleships/)**
 
-- **Classic Battleship Gameplay**: 10x10 grid with standard ship fleet (1x5, 1x4, 2x3, 1x2)
-- **Real-time Multiplayer**: Turn-based gameplay with shot proposals and acknowledgments
-- **Private Ship Placement**: Ships are stored privately until hit
-- **Modern UI**: Clean, intuitive React interface with integrated shot selection
-- **Comprehensive Validation**: Strategy pattern-based validation system
-- **Event-Driven Architecture**: Complete audit trail of all game actions
+## How It Works
 
-## 🏗️ Architecture
+Two players on separate Calimero nodes play battleships with fully decentralized state. Ship placements are stored in **private storage** (never replicated), while game state syncs automatically via **CRDTs** over gossipsub. The app uses four core Calimero features:
 
-### Frontend (`app/`)
-- **React + TypeScript**: Modern frontend with hooks and functional components
-- **Calimero Integration**: Seamless connection to the Calimero blockchain
-- **Responsive Design**: Clean, intuitive user interface
-- **Real-time Updates**: Live game state synchronization
+- **Namespaces** — identity scoping, recursive invitations, subgroup-based access control
+- **Multi-Service Bundles** — two WASM services (lobby + game) in one `.mpk` bundle
+- **Private Storage** — `#[app::private]` ship boards that never leave the node
+- **xcall** — cross-context calls from game to lobby when a match ends
 
-### Backend (`logic/`)
-- **Rust + Calimero SDK**: High-performance blockchain-based game logic
-- **Domain-Driven Design**: Well-organized modules with clear separation of concerns
-- **Validation Strategy Pattern**: Extensible validation system
-- **Comprehensive Documentation**: Full Rust documentation with examples
-
-## 📁 Project Structure
+## Project Structure
 
 ```
-battleship/
-├── app/                    # React frontend
-│   ├── src/
-│   │   ├── pages/         # Game pages (home, login, match, play)
-│   │   ├── features/      # Feature modules
-│   │   └── api/           # Calimero API client
-│   └── package.json
-├── logic/                  # Rust backend
-│   ├── src/
-│   │   ├── board.rs       # Board and coordinate types
-│   │   ├── ships.rs       # Ship and fleet management
-│   │   ├── players.rs     # Player management and private boards
-│   │   ├── game.rs        # Core game logic and match management
-│   │   ├── events.rs      # Domain events
-│   │   ├── validation.rs  # Validation strategy pattern
-│   │   └── lib.rs         # Main application logic
-│   └── Cargo.toml
-├── data/                   # Calimero node data
-└── scripts/               # Build and deployment scripts
+battleships/
+├── app/                          # React + TypeScript frontend
+│   ├── src/hooks/                # useBattleshipsLobby, useNamespaceBootstrap
+│   ├── src/api/lobby/            # LobbyClient (codegen from lobby-abi.json)
+│   └── src/api/game/             # GameClient (codegen from game-abi.json)
+├── logic/                        # Cargo workspace (3 crates)
+│   ├── crates/types/             # GameError, PublicKey (shared, no SDK dep)
+│   ├── crates/lobby/             # LobbyState + 6 methods → lobby.wasm
+│   ├── crates/game/              # GameState + 9 methods → game.wasm
+│   └── build-bundle.sh           # Builds both WASMs + packages .mpk
+├── e2e/                          # Merobox E2E workflow
+└── architecture/                 # Architecture docs (GitHub Pages)
 ```
 
-## 🚀 Quick Start
+### Multi-Service Bundle
+
+The `battleships-0.3.0.mpk` bundle contains:
+
+| File | Description |
+|------|-------------|
+| `manifest.json` | Multi-service manifest with services array |
+| `lobby.wasm` | Lobby service — matchmaking, player stats, match history |
+| `game.wasm` | Game service — gameplay, private boards, shot resolution |
+| `lobby-abi.json` | ABI for LobbyClient codegen |
+| `game-abi.json` | ABI for GameClient codegen |
+
+Each context specifies which service to run via `service_name` at creation time.
+
+## Quick Start
 
 ### Prerequisites
 
-- Node.js 16+ and npm/pnpm
-- Rust 1.70+
-- Calimero SDK
-- Git
+- Node.js 20+ and pnpm 9+
+- Rust (stable) with `wasm32-unknown-unknown` target
+- [Merobox](https://github.com/calimero-network/merobox) for local dev/E2E
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd battleship
-   ```
-
-2. **Install frontend dependencies (via root scripts)**
-   ```bash
-   pnpm run app:install
-   ```
-
-3. **Build the backend (WASM)**
-   ```bash
-   pnpm run logic:build
-   ```
-
-4. **Start the development servers (frontend + WASM watcher)**
-   ```bash
-   pnpm run app:dev
-   ```
-
-## 🎯 Game Rules
-
-### Ship Placement
-- **Fleet Composition**: 1x5 (carrier), 1x4 (battleship), 2x3 (cruiser, submarine), 1x2 (destroyer)
-- **Placement Rules**: Ships must be straight, contiguous, and non-adjacent
-- **Coordinate Format**: "x1,y1;x2,y2;..." for ship coordinates
-
-### Gameplay
-- **Turn-based**: Players alternate taking shots
-- **Shot Process**: Propose shot → Target acknowledges → Shot resolved
-- **Win Condition**: First player to sink all opponent ships wins
-
-## 🔧 Development
-
-### Backend Development
-
-The Rust backend follows Domain-Driven Design principles:
-
-- **`board`**: Board representation and coordinate management
-- **`ships`**: Ship definitions and fleet validation
-- **`players`**: Player management and private data storage
-- **`game`**: Core game logic and match management
-- **`events`**: Domain events for decoupling
-- **`validation`**: Strategy pattern-based validation system
-
-#### Building and Testing
+### Build
 
 ```bash
-# Build WASM (release profile used by the app)
-pnpm run logic:build
+# Install frontend dependencies
+pnpm --dir app install
 
-# Optional: clean build artifacts
-pnpm run logic:clean
+# Build WASM bundle (.mpk)
+cd logic && ./build-bundle.sh
 
-# Optional: continuously watch and sync WASM into app on changes
-pnpm run logic:watch
+# Start frontend dev server
+pnpm --dir app dev
+```
 
-# Generate ABI client for the frontend from the latest ABI
-pnpm run app:generate-client
+### E2E Testing
 
-# Low-level Rust workflows (if you need them)
+```bash
+pip install "merobox @ git+https://github.com/calimero-network/merobox.git@master"
+cd e2e
+merobox bootstrap run workflow-battleships-e2e.yml --e2e-mode
+```
+
+## Game Flow
+
+1. **Create Namespace** — host creates namespace with battleships app, sets default capabilities
+2. **Create Lobby** — lobby context in namespace root group (`service_name: lobby`)
+3. **Invite Player** — recursive namespace invitation covers root + all subgroups
+4. **Player Joins** — `joinNamespace` → auto-gets identity → joins lobby context
+5. **Create Match** — lobby allocates match ID → create subgroup → add P2 → create game context (`service_name: game`)
+6. **Place Ships** — both players place ships in private storage; `placed_p1`/`placed_p2` flags synced
+7. **Take Turns** — `propose_shot` → `acknowledge_shot_handler` on target node → resolves against private board → result synced
+8. **Game Ends** — all ships sunk → winner set → `xcall` to lobby → stats/history updated
+
+## Game Rules
+
+- **Fleet**: 1x5 (carrier), 1x4 (battleship), 2x3 (cruiser, submarine), 1x2 (destroyer)
+- **Placement**: Ships must be straight, contiguous, and non-adjacent
+- **Turns**: Players alternate shots. Target node resolves hit/miss against their private board
+- **Win**: First player to sink all opponent ships wins
+
+## Development
+
+```bash
+# Frontend
+pnpm --dir app lint              # Lint
+pnpm --dir app exec tsc --noEmit # Typecheck
+pnpm --dir app build             # Production build
+pnpm --dir app test              # Tests
+
+# Logic (Rust)
 cd logic
-cargo check          # Check for compilation errors
-cargo test           # Run tests
-cargo doc --open     # Generate and view documentation
+cargo fmt --check                                        # Format check
+cargo clippy --target wasm32-unknown-unknown -- -D warnings  # Clippy
+cargo build --target wasm32-unknown-unknown --profile app-release  # Build WASM
+
+# Generate ABI clients for frontend (LobbyClient + GameClient)
+pnpm --dir app codegen
 ```
 
-### Frontend Development
+## Architecture Docs
 
-The React frontend provides a modern, intuitive interface:
+The [architecture documentation](https://calimero-network.github.io/battleships/) covers:
 
-- **Integrated Shot Selection**: Click directly on the "Your Shots" board
-- **Real-time Updates**: Live game state synchronization
-- **Responsive Design**: Works on desktop and mobile devices
-- **Error Handling**: Comprehensive error messages and validation
+- Namespace hierarchy and capability configuration
+- Multi-service bundle structure (lobby + game services)
+- Private vs shared storage boundaries
+- Cross-context calls (xcall) from game to lobby
+- CRDT state sync and delta propagation
+- Complete game flow from namespace creation to match completion
+- Calimero platform features used (9 features)
 
-#### Development Commands
+## License
 
-```bash
-# Start the app + WASM res watcher together (recommended)
-pnpm run app:dev
-
-# Build production frontend
-pnpm run app:build
-
-# Preview the production build locally
-pnpm run app:preview
-```
-
-## 📚 Documentation
-
-### API Documentation
-
-Generate comprehensive API documentation:
-
-```bash
-cd logic
-cargo doc --open
-```
-
-### Code Documentation
-
-- **Rust Documentation**: Complete API reference with examples
-- **TypeScript Types**: Well-defined interfaces and types
-- **README Files**: Module-specific documentation
-
-## 🧪 Testing
-
-### Backend Testing
-
-```bash
-cd logic
-cargo test
-```
-
-### Frontend Testing
-
-```bash
-cd app
-npm test
-```
-
-## 🚀 Deployment
-
-### Calimero Deployment
-
-1. **Bootstrap local Calimero network with Merobox and run workflow**
-   ```bash
-      # Using pipx (recommended)
-      pipx install merobox
-
-      # Or on macOS with Homebrew
-      brew install calimero-network/tap/merobox
-   
-      # Run workflow
-      merobox bootstrap run workflow.yml
-   ```
-
-2. **Build the WASM**
-   ```bash
-   pnpm run logic:build
-   ```
-
-3. **Sync the built WASM into the app**
-   ```bash
-   pnpm run logic:sync
-   ```
-
-4. **Deploy to Calimero**
-   - Follow Calimero deployment guidelines
-   - Upload the generated WASM file (`logic/target/wasm32-unknown-unknown/app-release/kv_store.wasm`)
-   - Configure the frontend to connect to your Calimero node
-
-### Frontend Deployment
-
-```bash
-pnpm run app:build
-# Deploy the app/dist (or app/build) directory to your hosting service
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Calimero SDK**: For providing the blockchain infrastructure
-- **React Team**: For the excellent frontend framework
-- **Rust Community**: For the amazing language and ecosystem
-
-## 📞 Support
-
-If you have any questions or need help:
-
-1. Check the [documentation](logic/src/)
-2. Open an [issue](https://github.com/your-username/battleship/issues)
-3. Join our community discussions
-
----
-
-**Happy Gaming! 🎮⚓**
+MIT
