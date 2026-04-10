@@ -631,7 +631,9 @@ export default function MatchPage() {
   if (view === 'lobby') {
     return (
       <div className="app-bg">
-        <NavBar {...navProps} />
+        <NavBar {...navProps} extra={
+          <Button variant="secondary" onClick={() => setView('lobby-select')}>Namespaces</Button>
+        } />
         <div className="page-shell">
           <div className="page-content">
             <LobbyView
