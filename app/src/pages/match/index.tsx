@@ -236,11 +236,7 @@ export default function MatchPage() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!mero || !lobby.lobbyContextId || !lobby.lobbyJoined) {
-      return;
-    }
-    const executorKey = lobby.executorPublicKey ?? contextIdentity;
-    if (!executorKey) {
+    if (!mero || !lobby.lobbyContextId) {
       return;
     }
 
@@ -248,6 +244,19 @@ export default function MatchPage() {
 
     (async () => {
       try {
+        // Resolve executor identity: prefer lobby hook's key, then try context API, then auth fallback
+        let executorKey = lobby.executorPublicKey;
+        if (!executorKey) {
+          try {
+            const { identities } = await mero.admin.getContextIdentitiesOwned(lobby.lobbyContextId);
+            if (identities.length > 0) executorKey = identities[0];
+          } catch {
+            // context identity lookup failed
+          }
+        }
+        if (!executorKey) executorKey = contextIdentity;
+        if (!executorKey || cancelled) return;
+
         const { client, context } = await createLobbyClient(mero, {
           contextId: lobby.lobbyContextId,
           contextIdentity: executorKey,
@@ -268,7 +277,7 @@ export default function MatchPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [contextIdentity, defaultNodeUrl, lobby.lobbyContextId, lobby.lobbyJoined, lobby.executorPublicKey, mero, nodeUrl]);
+  }, [contextIdentity, defaultNodeUrl, lobby.lobbyContextId, lobby.executorPublicKey, mero, nodeUrl]);
 
   // ---------------------------------------------------------------------------
   // Match API init
