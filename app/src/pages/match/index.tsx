@@ -264,14 +264,11 @@ export default function MatchPage() {
         if (!cancelled) setCurrentUser(executorKey);
       } catch (e) {
         console.error('Lobby API init failed:', e);
-        if (!cancelled) {
-          show({ title: 'Failed to connect to lobby — retrying...', variant: 'warning' });
-        }
       }
     })();
 
     return () => { cancelled = true; };
-  }, [contextIdentity, defaultNodeUrl, lobby.lobbyContextId, lobby.lobbyJoined, lobby.executorPublicKey, mero, nodeUrl, show]);
+  }, [contextIdentity, defaultNodeUrl, lobby.lobbyContextId, lobby.lobbyJoined, lobby.executorPublicKey, mero, nodeUrl]);
 
   // ---------------------------------------------------------------------------
   // Match API init
