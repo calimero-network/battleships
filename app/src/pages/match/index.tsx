@@ -41,6 +41,7 @@ export default function MatchPage() {
 
   // View state
   const [view, setView] = useState<'lobby-select' | 'lobby' | 'game'>('lobby-select');
+  const manualLobbySelect = useRef(false);
 
   // Lobby creation form
   const [newLobbyName, setNewLobbyName] = useState('');
@@ -130,7 +131,7 @@ export default function MatchPage() {
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (view === 'lobby-select' && lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
+    if (view === 'lobby-select' && !manualLobbySelect.current && lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
       setView('lobby');
     }
   }, [view, lobby.selectedLobby, lobby.lobbyJoined, lobby.lobbyContextId]);
@@ -560,6 +561,7 @@ export default function MatchPage() {
 
   const handleEnterLobby = useCallback(() => {
     if (!lobby.lobbyContextId) { show({ title: 'No namespace context available', variant: 'error' }); return; }
+    manualLobbySelect.current = false;
     setView('lobby');
   }, [lobby, show]);
 
@@ -630,7 +632,7 @@ export default function MatchPage() {
   if (view === 'lobby') {
     return (
       <div className="app-bg">
-        <NavBar {...navProps} onBack={() => setView('lobby-select')} />
+        <NavBar {...navProps} onBack={() => { manualLobbySelect.current = true; setView('lobby-select'); }} />
         <div className="page-shell">
           <div className="page-content">
             <LobbyView
