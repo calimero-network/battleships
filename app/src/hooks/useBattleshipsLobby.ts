@@ -242,27 +242,30 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
       const parsed = JSON.parse(invitationJson);
 
       // Support both single invitation and recursive invitation formats.
-      // Recursive: { invitations: [{ groupId, invitation }, ...] }
+      // Recursive: { invitations: [{ groupId, invitation, groupAlias }, ...] }
       // Single:    { invitation: { groupId: number[], ... }, inviterSignature }
       let nsId: string | null = null;
       let invitation = parsed;
+      let groupAlias: string | undefined;
 
       if (Array.isArray(parsed?.invitations) && parsed.invitations.length > 0) {
         const first = parsed.invitations[0];
         nsId = first.groupId;
         invitation = first.invitation;
+        groupAlias = first.groupAlias || undefined;
       } else if (parsed?.invitation?.groupId) {
         const gid = parsed.invitation.groupId;
         nsId = Array.isArray(gid)
           ? gid.map((b: number) => b.toString(16).padStart(2, '0')).join('')
           : String(gid);
+        groupAlias = parsed.groupAlias || undefined;
       }
 
       if (!nsId) {
         throw new Error('Invalid invitation: cannot determine namespace ID');
       }
 
-      const result = await joinNamespace(nsId, { invitation });
+      const result = await joinNamespace(nsId, { invitation, groupAlias });
 
       if (result) {
         await refetchNamespaces();
