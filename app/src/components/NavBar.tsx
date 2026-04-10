@@ -15,6 +15,7 @@ interface NavBarProps {
   contextId?: string | null;
   currentUser?: string | null;
   onLogout: () => void;
+  onBack?: () => void;
   extra?: React.ReactNode;
 }
 
@@ -24,10 +25,36 @@ function truncate(s: string) {
 }
 
 export default function NavBar({
-  namespaceName, namespaceId, contextId, currentUser, onLogout, extra,
+  namespaceName, namespaceId, contextId, currentUser, onLogout, onBack, extra,
 }: NavBarProps) {
   return (
     <MeroNavbar variant="elevated" size="md">
+      {onBack ? (
+        <NavbarItem>
+          <button
+            onClick={onBack}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8rem',
+              padding: '0.35rem 0.5rem',
+              borderRadius: '6px',
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+          >
+            <span style={{ fontSize: '1rem' }}>&larr;</span>
+            Back
+          </button>
+        </NavbarItem>
+      ) : null}
       <NavbarBrand text="Battleships" />
       <NavbarMenu align="center">
         {namespaceId && (

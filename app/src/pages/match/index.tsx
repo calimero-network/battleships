@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Button,
   CopyToClipboard,
   useToast,
 } from '@calimero-network/mero-ui';
@@ -631,9 +630,7 @@ export default function MatchPage() {
   if (view === 'lobby') {
     return (
       <div className="app-bg">
-        <NavBar {...navProps} extra={
-          <Button variant="secondary" onClick={() => setView('lobby-select')}>Namespaces</Button>
-        } />
+        <NavBar {...navProps} onBack={() => setView('lobby-select')} />
         <div className="page-shell">
           <div className="page-content">
             <LobbyView
@@ -662,9 +659,7 @@ export default function MatchPage() {
   // --- Game ---
   return (
     <div className="app-bg">
-      <NavBar {...navProps} extra={
-        <Button variant="secondary" onClick={resetToLobby}>Back to Lobby</Button>
-      } />
+      <NavBar {...navProps} onBack={resetToLobby} />
       <div className="page-shell">
         <div className="page-content page-content-wide">
           {/* Match header */}
