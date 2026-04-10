@@ -244,7 +244,7 @@ export default function MatchPage() {
 
     (async () => {
       try {
-        // Resolve executor identity: prefer lobby hook's key, then try context API, then auth fallback
+        // Resolve executor identity
         let executorKey = lobby.executorPublicKey;
         if (!executorKey) {
           try {
