@@ -102,7 +102,6 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
 
   // The namespace IS the root group — groupId === namespaceId
   const groupId = namespaceId;
-  const groupLoading = namespacesLoading;
 
   // --- Derive lobby context from namespace's root group contexts ---
   const {
@@ -110,6 +109,8 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     loading: contextsLoading,
     refetch: refetchGroupContexts,
   } = useGroupContexts(namespaceId);
+
+  const groupLoading = namespacesLoading || contextsLoading;
 
   // The lobby context is the first context in the namespace root group
   const lobbyContextId = namespaceContexts.length > 0

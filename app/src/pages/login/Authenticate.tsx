@@ -1,22 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  Button,
-  Grid,
-  GridItem,
-  Navbar as MeroNavbar,
-  NavbarBrand,
-  NavbarMenu,
-  NavbarItem,
-} from '@calimero-network/mero-ui';
-import {
-  useMero,
-  ConnectButton,
-} from '@calimero-network/mero-react';
+import { Button } from '@calimero-network/mero-ui';
+import { useMero, ConnectButton } from '@calimero-network/mero-react';
 import translations from '../../constants/en.global.json';
 
 export default function Authenticate() {
@@ -30,200 +15,58 @@ export default function Authenticate() {
   }, [isAuthenticated, navigate]);
 
   return (
-    <>
-      <MeroNavbar variant="elevated" size="md">
-        <NavbarBrand text="Battleship" />
-        <NavbarMenu align="right">
-          <NavbarItem>
-            <ConnectButton />
-          </NavbarItem>
-        </NavbarMenu>
-      </MeroNavbar>
-      <div
-        style={{
-          minHeight: '100vh',
-          backgroundColor: '#111111',
-          color: 'white',
-        }}
-      >
-        <Grid
-          columns={12}
-          gap={16}
-          maxWidth="100%"
-          justify="center"
-          align="center"
-          style={{ minHeight: '100vh', padding: '2rem 1rem' }}
-        >
-          <GridItem colSpan={12} colStart={1}>
-            <main
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                minHeight: '80vh',
-              }}
-            >
-              <div style={{ width: '100%', maxWidth: '800px' }}>
-                <Card variant="rounded">
-                  <CardHeader>
-                    <CardTitle>
-                      {translations.auth.description.subtitle}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <div
-                        style={{
-                          background: 'rgba(59, 130, 246, 0.1)',
-                          border: '1px solid rgba(59, 130, 246, 0.2)',
-                          borderRadius: '8px',
-                          padding: '1rem',
-                          marginBottom: '1rem',
-                        }}
-                      >
-                        <p
-                          style={{
-                            color: '#e5e7eb',
-                            marginBottom: 0,
-                            fontSize: '1rem',
-                            lineHeight: '1.5',
-                            textAlign: 'center',
-                            fontWeight: '500',
-                          }}
-                        >
-                          {translations.home.demoDescription}
-                        </p>
-                      </div>
+    <div className="app-bg">
+      <div className="page-shell">
+        <div className="landing-hero">
+          <div className="landing-title fade-in">
+            <span>Battleships</span>
+          </div>
 
-                      <div
-                        style={{
-                          background: 'rgba(16, 185, 129, 0.1)',
-                          border: '1px solid rgba(16, 185, 129, 0.2)',
-                          borderRadius: '8px',
-                          padding: '1rem',
-                        }}
-                      >
-                        <h3
-                          style={{
-                            color: '#10b981',
-                            marginBottom: '1rem',
-                            fontSize: '1.1rem',
-                            textAlign: 'center',
-                            fontWeight: '600',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em',
-                          }}
-                        >
-                          ✨ Key Features
-                        </h3>
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns:
-                              'repeat(auto-fit, minmax(250px, 1fr))',
-                            gap: '0.75rem',
-                            maxWidth: '700px',
-                            margin: '0 auto',
-                          }}
-                        >
-                          {translations.auth.description.features.map(
-                            (feature, index) => (
-                              <div
-                                key={index}
-                                style={{
-                                  background: 'rgba(255, 255, 255, 0.05)',
-                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                  borderRadius: '6px',
-                                  padding: '0.75rem',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '0.5rem',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    width: '6px',
-                                    height: '6px',
-                                    borderRadius: '50%',
-                                    background:
-                                      'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span
-                                  style={{
-                                    color: '#e5e7eb',
-                                    fontSize: '0.85rem',
-                                    lineHeight: '1.4',
-                                    fontWeight: '500',
-                                  }}
-                                >
-                                  {feature}
-                                </span>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: '0.75rem',
-                        flexWrap: 'wrap',
-                        marginTop: '1.5rem',
-                        padding: '1rem',
-                        background: 'rgba(255, 255, 255, 0.02)',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
-                      }}
-                    >
-                      <Button
-                        variant="primary"
-                        onClick={() =>
-                          window.open(
-                            'https://docs.calimero.network',
-                            '_blank',
-                            'noopener,noreferrer',
-                          )
-                        }
-                      >
-                        📚 {translations.home.documentation}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          window.open(
-                            'https://github.com/calimero-network',
-                            '_blank',
-                            'noopener,noreferrer',
-                          )
-                        }
-                      >
-                        🐙 {translations.home.github}
-                      </Button>
-                      <Button
-                        variant="info"
-                        onClick={() =>
-                          window.open(
-                            'https://calimero.network',
-                            '_blank',
-                            'noopener,noreferrer',
-                          )
-                        }
-                      >
-                        🌐 {translations.home.website}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+          <p className="landing-subtitle fade-in fade-in-delay-1">
+            {translations.home.demoDescription}
+          </p>
+
+          <div className="landing-features fade-in fade-in-delay-2">
+            {translations.auth.description.features.map((feature, i) => (
+              <div className="landing-feature" key={i}>
+                <div className="landing-feature-dot" />
+                <span>{feature}</span>
               </div>
-            </main>
-          </GridItem>
-        </Grid>
+            ))}
+          </div>
+
+          <div className="fade-in fade-in-delay-3" style={{ marginTop: '0.5rem' }}>
+            <ConnectButton />
+          </div>
+
+          <div className="landing-actions fade-in fade-in-delay-4">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                window.open('https://docs.calimero.network', '_blank', 'noopener,noreferrer')
+              }
+            >
+              {translations.home.documentation}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                window.open('https://github.com/calimero-network/battleships', '_blank', 'noopener,noreferrer')
+              }
+            >
+              {translations.home.github}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                window.open('https://calimero.network', '_blank', 'noopener,noreferrer')
+              }
+            >
+              {translations.home.website}
+            </Button>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

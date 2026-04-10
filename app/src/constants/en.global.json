@@ -1,45 +1,40 @@
 {
   "home": {
-    "welcome": "Welcome to the Calimero KV Store Demo!",
-    "demoDescription": "A powerful key-value storage application built on Calimero's P2P network. Store, retrieve, and manage your data with real-time synchronization across the network.",
-    "calimeroIntro": "Calimero is a privacy-focused blockchain network that enables developers to build scalable, private applications. Our platform provides the infrastructure for creating decentralized applications with enhanced privacy and performance.",
-    "learnMore": "Learn more about Calimero:",
-    "documentation": "Documentation",
+    "welcome": "Battleships",
+    "demoDescription": "A fully decentralized battleships game running on the Calimero P2P network. Private ship placements, verifiable shots, real-time state sync between players — no central server.",
+    "calimeroIntro": "Built on Calimero's privacy-first P2P infrastructure. Each match runs in its own isolated context with cryptographic identity and private storage.",
+    "learnMore": "Learn more:",
+    "documentation": "Docs",
     "github": "GitHub",
-    "website": "Website",
-    "addEntry": "Add new entry",
-    "key": "Key",
-    "value": "Value",
-    "noEntries": "No entries",
-    "setEntry": "Set Entry",
-    "resetEntries": "Reset Entries",
-    "contextActions": "Context Actions",
+    "website": "Calimero",
     "logout": "Logout",
     "errors": {
-      "setFailed": "Failed to set entry",
-      "loadFailed": "Failed to load entries",
-      "clearFailed": "Failed to clear entries",
+      "setFailed": "Operation failed",
+      "loadFailed": "Failed to load data",
+      "clearFailed": "Failed to clear data",
       "removeFailed": "Failed to remove entry"
     }
   },
   "auth": {
-    "title": "KV Store",
+    "title": "Battleships",
     "back": "Back",
-    "goToContext": "Go to context actions",
+    "goToContext": "Enter Game",
     "description": {
-      "title": "Welcome to the Calimero KV Store Demo",
-      "subtitle": "A P2P key-value storage application",
+      "title": "Naval Command",
+      "subtitle": "Decentralized Naval Warfare",
       "features": [
-        "Store and retrieve key-value pairs on the Calimero P2P network",
-        "Real-time data synchronization across P2P nodes",
-        "Secure and distributed data storage",
-        "Easy-to-use interface for managing your data"
+        "Private ship placement — opponents never see your board",
+        "Verifiable shots via cross-context calls",
+        "Real-time P2P state sync between nodes",
+        "Namespace-scoped lobbies with invitation system",
+        "Per-match isolated contexts with 2-player subgroups",
+        "Multi-service WASM bundle (lobby + game)"
       ],
-      "getStarted": "Connect your wallet to get started"
+      "getStarted": "Connect your node to deploy"
     }
   },
   "context": {
     "backToLogin": "Back to Login",
-    "goToHome": "Go to Home"
+    "goToHome": "Enter Lobby"
   }
 }
