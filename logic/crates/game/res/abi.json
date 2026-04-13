@@ -543,13 +543,13 @@
           }
         },
         {
-          "name": "_x",
+          "name": "x",
           "type": {
             "kind": "u32"
           }
         },
         {
-          "name": "_y",
+          "name": "y",
           "type": {
             "kind": "u32"
           }

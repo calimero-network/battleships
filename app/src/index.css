@@ -302,7 +302,7 @@ html, body {
 }
 
 .cell-hit::after {
-  content: '\u00D7';
+  content: '\00D7';
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--fire-red);
@@ -316,7 +316,7 @@ html, body {
 }
 
 .cell-miss::after {
-  content: '\u2022';
+  content: '\2022';
   font-size: 0.7rem;
   color: var(--miss-blue);
 }
