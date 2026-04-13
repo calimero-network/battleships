@@ -110,11 +110,39 @@ steps:
     statements:
       - 'is_set({{match_id}})'
 
-  - name: Create Match Context in Namespace
+  # The frontend creates a per-match subgroup inside the namespace, then
+  # creates the match context inside that subgroup. Mirror that flow here.
+  - name: Create Match Subgroup in Namespace
+    type: create_group_in_namespace
+    node: calimero-node-1
+    namespace_id: '{{namespace_id}}'
+    group_alias: 'match-{{match_id}}'
+    outputs:
+      match_subgroup_id: groupId
+
+  - name: Assert Match Subgroup Created
+    type: assert
+    statements:
+      - 'is_set({{match_subgroup_id}})'
+
+  - name: Wait for Subgroup Governance Propagation
+    type: wait
+    seconds: 5
+    message: Waiting for subgroup governance to propagate to node 2
+
+  - name: Add Node 2 to Match Subgroup
+    type: add_group_members
+    node: calimero-node-1
+    group_id: '{{match_subgroup_id}}'
+    members:
+      - identity: '{{p2_identity}}'
+        role: Member
+
+  - name: Create Match Context in Subgroup
     type: create_context
     node: calimero-node-1
     application_id: '{{app_id}}'
-    group_id: '{{namespace_id}}'
+    group_id: '{{match_subgroup_id}}'
     service_name: game
     params: '{"player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
     outputs:
@@ -136,16 +164,11 @@ steps:
       match_id: '{{match_id}}'
       context_id: '{{match_ctx_id}}'
 
-  # Wait for namespace governance + lobby state to propagate before node-2 joins match
-  - name: Wait for Lobby and Governance Propagation
+  # Wait for subgroup membership + match context registration to propagate before node-2 joins
+  - name: Wait for Subgroup and Context Propagation
     type: wait
     seconds: 10
-    message: Waiting for lobby state and governance to propagate
-
-  - name: Wait for Namespace Governance Propagation
-    type: wait
-    seconds: 10
-    message: Waiting for match context group registration to propagate to node 2
+    message: Waiting for subgroup membership and match context registration to propagate
 
   - name: Node 2 Joins Match Context
     type: join_context
@@ -258,7 +281,9 @@ steps:
   # Phase D: Gameplay — Shooting Round 1
   # ============================================================
 
-  # Player 1's turn — shoot at P2's ship at (8,0)
+  # Player 1's turn — shoot at P2's ship at (8,0).
+  # acknowledge_shot_handler auto-fires on node-2 when the ShotProposed
+  # delta arrives via gossipsub broadcast (no manual ack needed).
   - name: Player 1 Proposes Shot at (8,0)
     type: call
     node: calimero-node-1
@@ -270,7 +295,7 @@ steps:
       x: 8
       y: 0
 
-  - name: Wait for Shot Sync (P1 shot)
+  - name: Wait for Shot Resolution Sync (P1 shot + P2 auto-ack)
     type: wait_for_sync
     nodes:
       - calimero-node-1
@@ -278,26 +303,7 @@ steps:
     context_id: '{{match_ctx_id}}'
     timeout: 30
 
-  - name: Player 2 Acknowledges Shot
-    type: call
-    node: calimero-node-2
-    context_id: '{{match_ctx_id}}'
-    method: acknowledge_shot
-    executor_public_key: '{{match_p2_key}}'
-    args:
-      match_id: '{{game_match_id}}'
-    outputs:
-      shot1_result: result.output
-
-  - name: Wait for Ack Sync (P2 ack)
-    type: wait_for_sync
-    nodes:
-      - calimero-node-1
-      - calimero-node-2
-    context_id: '{{match_ctx_id}}'
-    timeout: 30
-
-  # Verify P1's shots board shows the hit
+  # Verify P1's shots board shows the resolved hit
   - name: Player 1 Checks Shots Board
     type: call
     node: calimero-node-1
@@ -314,7 +320,8 @@ steps:
     statements:
       - 'is_set({{p1_shots}})'
 
-  # Player 2's turn — shoot at P1's ship at (0,0)
+  # Player 2's turn — shoot at P1's ship at (0,0).
+  # acknowledge_shot_handler auto-fires on node-1 when the delta arrives.
   - name: Player 2 Proposes Shot at (0,0)
     type: call
     node: calimero-node-2
@@ -326,26 +333,7 @@ steps:
       x: 0
       y: 0
 
-  - name: Wait for Shot Sync (P2 shot)
-    type: wait_for_sync
-    nodes:
-      - calimero-node-1
-      - calimero-node-2
-    context_id: '{{match_ctx_id}}'
-    timeout: 30
-
-  - name: Player 1 Acknowledges Shot
-    type: call
-    node: calimero-node-1
-    context_id: '{{match_ctx_id}}'
-    method: acknowledge_shot
-    executor_public_key: '{{match_p1_key}}'
-    args:
-      match_id: '{{game_match_id}}'
-    outputs:
-      shot2_result: result.output
-
-  - name: Wait for Ack Sync (P1 ack)
+  - name: Wait for Shot Resolution Sync (P2 shot + P1 auto-ack)
     type: wait_for_sync
     nodes:
       - calimero-node-1

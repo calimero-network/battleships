@@ -279,7 +279,8 @@ impl GameState {
         Ok(from_executor_id()?.to_base58())
     }
 
-    pub fn acknowledge_shot_handler(&mut self, id: &str, _x: u8, _y: u8) -> app::Result<()> {
+    #[allow(unused_variables)]
+    pub fn acknowledge_shot_handler(&mut self, id: &str, x: u8, y: u8) -> app::Result<()> {
         self.acknowledge_shot(id)?;
         Ok(())
     }
