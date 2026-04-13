@@ -240,6 +240,7 @@ export default function MatchPage() {
       return;
     }
 
+    const lobbyContextId = lobby.lobbyContextId;
     let cancelled = false;
 
     (async () => {
@@ -248,7 +249,7 @@ export default function MatchPage() {
         let executorKey = lobby.executorPublicKey;
         if (!executorKey) {
           try {
-            const { identities } = await mero.admin.getContextIdentitiesOwned(lobby.lobbyContextId);
+            const { identities } = await mero.admin.getContextIdentitiesOwned(lobbyContextId);
             if (identities.length > 0) executorKey = identities[0];
           } catch {
             // context identity lookup failed
@@ -258,7 +259,7 @@ export default function MatchPage() {
         if (!executorKey || cancelled) return;
 
         const { client, context } = await createLobbyClient(mero, {
-          contextId: lobby.lobbyContextId,
+          contextId: lobbyContextId,
           contextIdentity: executorKey,
           role: 'lobby' as ContextRole,
         });

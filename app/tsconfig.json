@@ -16,11 +16,9 @@
     "noEmit": true,
     "outDir": "build",
     "jsx": "react",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
-    },
-    "types": ["vite/client"]
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "custom.d.ts", "src/assets"],
   "exclude": ["node_modules", "build"]
