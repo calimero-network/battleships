@@ -256,6 +256,7 @@ html, body {
 
 .row-label {
   width: var(--cell-size);
+  margin-right: var(--cell-gap);
   text-align: center;
   font-family: var(--font-mono);
   font-size: 0.6rem;
