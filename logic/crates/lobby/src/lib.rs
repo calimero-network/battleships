@@ -4,8 +4,10 @@ use battleships_types::{GameError, PublicKey};
 use calimero_sdk::app;
 use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
+use calimero_sdk::types::Error as AppError;
 use calimero_storage::collections::crdt_meta::MergeError;
 use calimero_storage::collections::{Counter, LwwRegister, Mergeable, UnorderedMap, Vector};
+use calimero_storage::env as storage_env;
 use calimero_storage_macros::Mergeable;
 
 pub mod events;
@@ -137,17 +139,63 @@ pub struct LobbyState {
 impl LobbyState {
     #[app::init]
     pub fn init() -> LobbyState {
-        // Full body lands in Task 3 — for now we need a value of the
-        // correct type so the macro plumbing compiles.
-        todo!("task 3: init() will construct the Lobby state with CRDT collections")
+        LobbyState {
+            created_ms: LwwRegister::new(storage_env::time_now()),
+            matches: UnorderedMap::new_with_field_name("lobby:matches"),
+            player_stats: UnorderedMap::new_with_field_name("lobby:player_stats"),
+            history: Vector::new_with_field_name("lobby:history"),
+        }
     }
 
     // ---- Lobby API ----
 
     pub fn create_match(&mut self, player2: String) -> app::Result<String> {
-        // Implemented in Task 3 — collision rejection + new match-id format.
-        let _ = (player2, from_executor_id);
-        todo!("task 3: create_match")
+        let caller = from_executor_id().map_err(|e| AppError::msg(e.to_string()))?;
+        let caller_b58 = caller.to_base58();
+        let now = storage_env::time_now();
+        match self.create_match_with_clock(&caller_b58, &player2, now) {
+            Ok(id) => {
+                app::emit!(Event::MatchCreated { id: &id });
+                app::emit!(Event::MatchListUpdated {});
+                Ok(id)
+            }
+            Err(GameError::MatchIdCollision) => {
+                let attempted = format!("{caller_b58}-{player2}-{now}");
+                app::emit!(Event::MatchIdCollision { attempted_id: &attempted });
+                Err(AppError::msg(GameError::MatchIdCollision.to_string()))
+            }
+            Err(e) => Err(AppError::msg(e.to_string())),
+        }
+    }
+
+    /// Testable inner: deterministic, no event emits (callers emit on outcome).
+    pub(crate) fn create_match_with_clock(
+        &mut self,
+        caller_b58: &str,
+        player2_b58: &str,
+        now_ms: u64,
+    ) -> Result<String, GameError> {
+        let match_id = format!("{caller_b58}-{player2_b58}-{now_ms}");
+        let collides = self
+            .matches
+            .contains(&match_id)
+            .map_err(|_| GameError::Invalid("matches.contains failed"))?;
+        if collides {
+            return Err(GameError::MatchIdCollision);
+        }
+        let summary = MatchSummary {
+            match_id: match_id.clone(),
+            player1: caller_b58.to_string(),
+            player2: player2_b58.to_string(),
+            status: MatchStatus::Pending,
+            context_id: None,
+            winner: None,
+            created_ms: now_ms,
+        };
+        self.matches
+            .insert(match_id.clone(), summary)
+            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+        Ok(match_id)
     }
 
     pub fn set_match_context_id(
@@ -161,8 +209,11 @@ impl LobbyState {
     }
 
     pub fn get_matches(&self) -> app::Result<Vec<MatchSummary>> {
-        // Implemented in Task 3 — iterate UnorderedMap.
-        todo!("task 3: get_matches")
+        let entries = self
+            .matches
+            .entries()
+            .map_err(|e| AppError::msg(format!("matches.entries: {e}")))?;
+        Ok(entries.map(|(_, v)| v).collect())
     }
 
     pub fn get_player_stats(&self, player: String) -> app::Result<Option<PlayerStats>> {
@@ -191,6 +242,8 @@ impl LobbyState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use battleships_types::GameError;
+    use bs58;
 
     #[test]
     fn player_stats_counters_start_at_zero() {
@@ -209,5 +262,37 @@ mod tests {
         assert_eq!(stats.wins.value_unsigned().unwrap(), 1);
         assert_eq!(stats.games_played.value_unsigned().unwrap(), 2);
         assert_eq!(stats.losses.value_unsigned().unwrap(), 0);
+    }
+
+    #[test]
+    fn init_populates_created_ms() {
+        let state = LobbyState::init();
+        assert!(*state.created_ms.get() > 0);
+    }
+
+    #[test]
+    fn create_match_uses_composed_id() {
+        // The implementation reads env::time_now() and env::executor_id(); in a unit
+        // test environment those return deterministic or zeroed values. This test
+        // documents the expected format rather than a specific value.
+        let mut state = LobbyState::init();
+        let caller_b58 = bs58::encode([1u8; 32]).into_string();
+        let player2_b58 = bs58::encode([2u8; 32]).into_string();
+        let id = state
+            .create_match_with_clock(&caller_b58, &player2_b58, 1_700_000_000_000)
+            .unwrap();
+        assert!(id.starts_with(&format!("{caller_b58}-{player2_b58}-")));
+        assert!(state.matches.contains(&id).unwrap());
+    }
+
+    #[test]
+    fn create_match_rejects_collision() {
+        let mut state = LobbyState::init();
+        let a = bs58::encode([1u8; 32]).into_string();
+        let b = bs58::encode([2u8; 32]).into_string();
+        let ts = 1_700_000_000_000u64;
+        let _ = state.create_match_with_clock(&a, &b, ts).unwrap();
+        let err = state.create_match_with_clock(&a, &b, ts).unwrap_err();
+        assert!(matches!(err, GameError::MatchIdCollision));
     }
 }

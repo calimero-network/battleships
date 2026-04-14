@@ -8,9 +8,13 @@ crate-type = ["cdylib"]
 
 [dependencies]
 battleships-types = { workspace = true }
+bs58 = { workspace = true }
 calimero-sdk = { workspace = true }
 calimero-storage = { workspace = true }
 calimero-storage-macros = { workspace = true }
+
+[dev-dependencies]
+bs58 = { workspace = true }
 
 [build-dependencies]
 calimero-wasm-abi = { workspace = true }

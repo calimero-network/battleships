@@ -12,6 +12,17 @@
         }
       ]
     },
+    "Event_MatchIdCollision": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "attempted_id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "LobbyState": {
       "kind": "record",
       "fields": [
@@ -308,6 +319,12 @@
       "name": "MatchCreated",
       "payload": {
         "$ref": "Event_MatchCreated"
+      }
+    },
+    {
+      "name": "MatchIdCollision",
+      "payload": {
+        "$ref": "Event_MatchIdCollision"
       }
     },
     {
