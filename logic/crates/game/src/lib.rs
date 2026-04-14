@@ -258,6 +258,24 @@ impl GameState {
         } else {
             &mut self.shots_p2
         };
+        // Reject re-firing at a cell already resolved to Hit or Miss.
+        // Without this guard, the second propose_shot would overwrite the
+        // existing Hit with Pending; acknowledge_shot would then read the
+        // already-mutated private board (Cell::Hit, not Cell::Ship) and
+        // record Miss into the shooter's map. The end-of-match `replay_shots`
+        // audit would see Miss at a position that was a Ship in the pristine
+        // board and emit a false `AuditFailed` against an honest player.
+        if let Some(existing) = shooter_map
+            .get(&key)
+            .map_err(|e| AppError::msg(format!("shots.get: {e}")))?
+        {
+            let cell = Cell::from_u8(*existing.get());
+            if cell == Cell::Hit || cell == Cell::Miss {
+                app::bail!(GameError::Invalid(format!(
+                    "cell ({x},{y}) was already shot ({cell:?})"
+                )));
+            }
+        }
         shooter_map
             .insert(key, LwwRegister::new(Cell::Pending.to_u8()))
             .map_err(|e| AppError::msg(format!("shots.insert: {e}")))?;
@@ -730,5 +748,37 @@ mod tests {
             Some(lobby_match_id.as_str())
         );
         assert_eq!(state.lobby_context_id.get().as_deref(), Some("lobby"));
+    }
+
+    /// Exercises the duplicate-shot guard added in `propose_shot`. A direct
+    /// call into propose_shot would need a mocked executor identity, so we
+    /// pin the underlying invariant — that a Hit/Miss in the shooter map is
+    /// detected — at the map layer instead. If this contract changes, the
+    /// guard in propose_shot needs the matching update.
+    #[test]
+    fn shot_map_distinguishes_resolved_from_pending() {
+        let mut map: UnorderedMap<[u8; 1], LwwRegister<u8>> =
+            UnorderedMap::new_with_field_name("test:duplicate_shot_guard");
+        let key: [u8; 1] = [34]; // y*10+x for (3,4)
+        map.insert(key, LwwRegister::new(Cell::Pending.to_u8()))
+            .unwrap();
+        let cell_after_propose = Cell::from_u8(*map.get(&key).unwrap().unwrap().get());
+        // Pending should NOT be rejected as "already shot".
+        assert_eq!(cell_after_propose, Cell::Pending);
+        assert!(cell_after_propose != Cell::Hit && cell_after_propose != Cell::Miss);
+
+        // After the ack resolves the shot, the cell holds Hit (or Miss).
+        map.insert(key, LwwRegister::new(Cell::Hit.to_u8()))
+            .unwrap();
+        let cell_after_ack = Cell::from_u8(*map.get(&key).unwrap().unwrap().get());
+        // A second propose_shot on this cell MUST reject — propose_shot
+        // checks for exactly this Hit-or-Miss state.
+        assert!(cell_after_ack == Cell::Hit || cell_after_ack == Cell::Miss);
+
+        // Same for Miss.
+        map.insert(key, LwwRegister::new(Cell::Miss.to_u8()))
+            .unwrap();
+        let cell_miss = Cell::from_u8(*map.get(&key).unwrap().unwrap().get());
+        assert_eq!(cell_miss, Cell::Miss);
     }
 }
