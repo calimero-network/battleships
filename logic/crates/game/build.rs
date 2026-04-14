@@ -9,7 +9,7 @@ fn main() {
     let module_files = [
         "lib.rs",
         "events.rs",
-        "game.rs",
+        "audit.rs",
         "players.rs",
         "board.rs",
         "ships.rs",

@@ -11,7 +11,6 @@ use sha2::{Digest, Sha256};
 pub mod audit;
 pub mod board;
 pub mod events;
-pub mod game;
 pub mod players;
 pub mod ships;
 pub mod validation;
