@@ -13,6 +13,25 @@ pub enum GameError {
     Forbidden(&'static str),
     #[error("already finished")]
     Finished,
+    #[error("match id already exists")]
+    MatchIdCollision,
+    #[error("board commitment already set")]
+    AlreadyCommitted,
+    #[error("commitment hash does not match revealed board")]
+    CommitmentMismatch,
+    #[error("audit failed: {reason}")]
+    AuditFailed { reason: String },
+    #[error("private board not found for this match")]
+    BoardNotFound,
+}
+
+/// Seed material for exporting a player's private board so it can be re-imported
+/// on another node (e.g. after device migration). The salt is required to
+/// reconstruct the SHA256 commitment that was published on-chain at placement time.
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+pub struct ExportedSeed {
+    pub board_bytes: Vec<u8>,
+    pub salt: [u8; 16],
 }
 
 /// Player public key — 32-byte Ed25519 key with base58 encoding.
@@ -76,5 +95,23 @@ mod tests {
         let err = GameError::NotFound("test".into());
         assert!(err.to_string().contains("test"));
         assert!(GameError::Finished.to_string().contains("finished"));
+    }
+
+    #[test]
+    fn error_variants_exist() {
+        let _ = GameError::MatchIdCollision;
+        let _ = GameError::AlreadyCommitted;
+        let _ = GameError::CommitmentMismatch;
+        let _ = GameError::AuditFailed { reason: "x".into() };
+        let _ = GameError::BoardNotFound;
+    }
+
+    #[test]
+    fn exported_seed_roundtrips_borsh() {
+        let seed = ExportedSeed { board_bytes: vec![1, 2, 3], salt: [7u8; 16] };
+        let bytes = borsh::to_vec(&seed).unwrap();
+        let back: ExportedSeed = borsh::from_slice(&bytes).unwrap();
+        assert_eq!(back.board_bytes, vec![1, 2, 3]);
+        assert_eq!(back.salt, [7u8; 16]);
     }
 }
