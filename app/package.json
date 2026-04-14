@@ -15,7 +15,7 @@
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
-    "@calimero-network/abi-codegen": "^1.0.1",
+    "@calimero-network/abi-codegen": "^1.0.2",
     "@eslint/js": "^9.4.0",
     "@types/eslint__js": "^8.42.3",
     "@types/node": "^16.18.98",
@@ -44,7 +44,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "codegen": "calimero-abi-codegen -i ../logic/crates/lobby/res/abi.json -o src/api/lobby --client-name LobbyClient && calimero-abi-codegen -i ../logic/crates/game/res/abi.json -o src/api/game --client-name GameClient && node scripts/postcodegen.mjs",
+    "codegen": "calimero-abi-codegen -i ../logic/crates/lobby/res/abi.json -o src/api/lobby --client-name LobbyClient && calimero-abi-codegen -i ../logic/crates/game/res/abi.json -o src/api/game --client-name GameClient",
     "lint": "concurrently \"pnpm:lint:*(!fix)\"",
     "lint:src": "eslint . --ext .ts,.tsx src --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "concurrently \"pnpm:lint:*:fix\"",
