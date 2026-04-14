@@ -478,6 +478,12 @@
             "kind": "bytes",
             "size": 16
           }
+        },
+        {
+          "name": "pristine",
+          "type": {
+            "kind": "bytes"
+          }
         }
       ]
     },

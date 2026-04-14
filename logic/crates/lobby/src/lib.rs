@@ -204,6 +204,16 @@ impl LobbyState {
         player2_b58: &str,
         now_ms: u64,
     ) -> Result<String, GameError> {
+        // Reject self-matches: the match-id scheme and turn protocol both
+        // assume two distinct players.
+        if caller_b58 == player2_b58 {
+            return Err(GameError::Invalid("cannot create match against self"));
+        }
+        // Reject malformed player2 keys early — a non-base58 string would
+        // produce a match-id that the game context could never validate
+        // the caller against.
+        PublicKey::from_base58(player2_b58)
+            .map_err(|_| GameError::Invalid("player2 is not a valid base58 key"))?;
         let match_id = format!("{caller_b58}-{player2_b58}-{now_ms}");
         let collides = self
             .matches
@@ -248,6 +258,12 @@ impl LobbyState {
             .get(&match_id.to_string())
             .map_err(|_| GameError::Invalid("matches.get failed"))?
             .ok_or(GameError::Invalid("unknown match_id"))?;
+        // Only allow the Pending -> Active transition. Re-linking an Active
+        // match silently is redundant; reactivating a Finished match would
+        // corrupt history.
+        if summary.status != MatchStatus::Pending {
+            return Err(GameError::Invalid("match not in Pending state"));
+        }
         summary.status = MatchStatus::Active;
         summary.context_id = Some(context_id.to_string());
         self.matches
@@ -460,5 +476,58 @@ mod tests {
         assert_eq!(loser_stats.wins.value_unsigned().unwrap(), 0);
 
         assert_eq!(state.history.len().unwrap(), 1);
+    }
+
+    #[test]
+    fn create_match_rejects_self_match() {
+        let mut state = LobbyState::init();
+        let a = bs58::encode([1u8; 32]).into_string();
+        let err = state
+            .create_match_with_clock(&a, &a, 1_700_000_000_000)
+            .unwrap_err();
+        assert!(matches!(err, GameError::Invalid(_)));
+    }
+
+    #[test]
+    fn create_match_rejects_non_base58_player2() {
+        let mut state = LobbyState::init();
+        let a = bs58::encode([1u8; 32]).into_string();
+        let err = state
+            .create_match_with_clock(&a, "!!!not-base58!!!", 1_700_000_000_000)
+            .unwrap_err();
+        assert!(matches!(err, GameError::Invalid(_)));
+    }
+
+    #[test]
+    fn set_match_context_id_rejects_non_pending_transition() {
+        let mut state = LobbyState::init();
+        let a = bs58::encode([1u8; 32]).into_string();
+        let b = bs58::encode([2u8; 32]).into_string();
+        let id = state
+            .create_match_with_clock(&a, &b, 1_700_000_000_000)
+            .unwrap();
+        state.set_match_context_id_inner(&id, "ctx_abc").unwrap();
+        // Second call finds the match in Active, not Pending — must reject.
+        let err = state
+            .set_match_context_id_inner(&id, "ctx_xyz")
+            .unwrap_err();
+        assert!(matches!(err, GameError::Invalid(_)));
+    }
+
+    #[test]
+    fn set_match_context_id_rejects_finished_match() {
+        let mut state = LobbyState::init();
+        let winner = bs58::encode([1u8; 32]).into_string();
+        let loser = bs58::encode([2u8; 32]).into_string();
+        let id = state
+            .create_match_with_clock(&winner, &loser, 1_700_000_000_000)
+            .unwrap();
+        state
+            .on_match_finished_inner(&id, &winner, &loser, 1_700_000_000_999)
+            .unwrap();
+        let err = state
+            .set_match_context_id_inner(&id, "ctx_abc")
+            .unwrap_err();
+        assert!(matches!(err, GameError::Invalid(_)));
     }
 }

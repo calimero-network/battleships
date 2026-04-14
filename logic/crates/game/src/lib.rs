@@ -171,12 +171,15 @@ impl GameState {
         let key = PrivateBoards::key(match_id);
         let mut pb = priv_mut.boards.get(&key)?.unwrap_or_default();
         pb.place_ships(ships)?;
+        // Snapshot the pristine board NOW — `own` will be mutated as shots
+        // resolve, but the commitment hash must always match placement state.
+        pb.capture_pristine();
 
         // Generate salt, compute commitment.
         let mut salt = [0u8; 16];
         calimero_sdk::env::random_bytes(&mut salt);
         pb.set_salt(salt);
-        let board_bytes = calimero_sdk::borsh::to_vec(pb.get_board())
+        let board_bytes = calimero_sdk::borsh::to_vec(&pb.pristine().to_vec())
             .map_err(|e| AppError::msg(format!("serialize board: {e}")))?;
         let commitment = compute_commitment(&board_bytes, &salt);
 
@@ -304,7 +307,7 @@ impl GameState {
                 .set(BOARD_SIZE, pending.x, pending.y, Cell::Miss);
         }
         let ships_remaining = pb.get_ship_count();
-        let own_board_cells = pb.get_board().0.clone();
+        let pristine_bytes = pb.pristine().to_vec();
         let salt = *pb.salt();
         priv_mut.boards.insert(key, pb)?;
         drop(priv_mut);
@@ -335,7 +338,7 @@ impl GameState {
                 .map_err(|e| AppError::msg(format!("commitments.get_for_user: {e}")))?
                 .ok_or_else(|| AppError::from(GameError::Invalid("no commitment for caller")))?;
             let commitment_hash = *commitment.get();
-            let board_bytes = calimero_sdk::borsh::to_vec(&own_board_cells)
+            let board_bytes = calimero_sdk::borsh::to_vec(&pristine_bytes)
                 .map_err(|e| AppError::msg(format!("serialize board: {e}")))?;
             let against_me = if pending.shooter == p1 {
                 &self.shots_p1
@@ -343,7 +346,7 @@ impl GameState {
                 &self.shots_p2
             };
             let commitment_ok = audit::verify_commitment(&board_bytes, &salt, &commitment_hash);
-            let replay_ok = audit::replay_shots(&own_board_cells, against_me).is_ok();
+            let replay_ok = audit::replay_shots(&pristine_bytes, against_me).is_ok();
             let audit_ok = commitment_ok && replay_ok;
 
             // Winner is always the shooter of this sinking hit.
@@ -434,7 +437,7 @@ impl GameState {
             .boards
             .get(&PrivateBoards::key(match_id))?
             .ok_or_else(|| AppError::from(GameError::BoardNotFound))?;
-        let own_cells = pb.get_board().0.clone();
+        let own_cells = pb.pristine().to_vec();
         let board_bytes = calimero_sdk::borsh::to_vec(&own_cells)
             .map_err(|e| AppError::msg(format!("serialize board: {e}")))?;
         let caller_b58 = caller.to_base58();
@@ -478,7 +481,10 @@ impl GameState {
             .boards
             .get(&PrivateBoards::key(match_id))?
             .ok_or_else(|| AppError::from(GameError::BoardNotFound))?;
-        let board_bytes = calimero_sdk::borsh::to_vec(pb.get_board())
+        // Export the pristine-board snapshot so the commitment recomputation
+        // on re-import always matches regardless of mid-game mutations.
+        let pristine = pb.pristine().to_vec();
+        let board_bytes = calimero_sdk::borsh::to_vec(&pristine)
             .map_err(|e| AppError::msg(format!("serialize board: {e}")))?;
         Ok(ExportedSeed {
             board_bytes,
