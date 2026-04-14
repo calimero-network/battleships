@@ -182,41 +182,43 @@ impl LobbyState {
         let caller = from_executor_id().map_err(|e| AppError::msg(e.to_string()))?;
         let caller_b58 = caller.to_base58();
         let now = storage_env::time_now();
-        match self.create_match_with_clock(&caller_b58, &player2, now) {
-            Ok(id) => {
-                app::emit!(Event::MatchCreated { id: &id });
-                app::emit!(Event::MatchListUpdated {});
-                Ok(id)
-            }
-            Err(GameError::MatchIdCollision) => {
-                let attempted = format!("{caller_b58}-{player2}-{now}");
-                app::emit!(Event::MatchIdCollision {
-                    attempted_id: &attempted
-                });
-                Err(AppError::msg(GameError::MatchIdCollision.to_string()))
-            }
-            Err(e) => Err(AppError::msg(e.to_string())),
-        }
+        let mut nonce_bytes = [0u8; 4];
+        calimero_sdk::env::random_bytes(&mut nonce_bytes);
+        let nonce_hex = nonce_bytes
+            .iter()
+            .fold(String::with_capacity(8), |mut acc, b| {
+                acc.push_str(&format!("{:02x}", b));
+                acc
+            });
+        let id = self
+            .create_match_with_id(&caller_b58, &player2, now, &nonce_hex)
+            .map_err(|e| AppError::msg(e.to_string()))?;
+        app::emit!(Event::MatchCreated { id: &id });
+        app::emit!(Event::MatchListUpdated {});
+        Ok(id)
     }
 
-    /// Testable inner: deterministic, no event emits (callers emit on outcome).
-    pub(crate) fn create_match_with_clock(
+    /// Testable inner: deterministic given an explicit nonce, no event emits.
+    /// The match_id is `{creator_b58}-{ts}-{nonce_hex}`. The 32-bit nonce
+    /// makes a same-(creator, ts) collision astronomically unlikely; we still
+    /// reject one if it ever happens (defensive — random-bytes giving the
+    /// same 4 bytes twice is a hardware fault, not a runtime concern).
+    pub(crate) fn create_match_with_id(
         &mut self,
         caller_b58: &str,
         player2_b58: &str,
         now_ms: u64,
+        nonce_hex: &str,
     ) -> Result<String, GameError> {
-        // Reject self-matches: the match-id scheme and turn protocol both
-        // assume two distinct players.
+        // Reject self-matches: the turn protocol assumes two distinct players.
         if caller_b58 == player2_b58 {
             return Err(GameError::Invalid("cannot create match against self"));
         }
-        // Reject malformed player2 keys early — a non-base58 string would
-        // produce a match-id that the game context could never validate
-        // the caller against.
+        // Reject malformed player2 keys early so the game context can validate
+        // its caller against a real key.
         PublicKey::from_base58(player2_b58)
             .map_err(|_| GameError::Invalid("player2 is not a valid base58 key"))?;
-        let match_id = format!("{caller_b58}-{player2_b58}-{now_ms}");
+        let match_id = format!("{caller_b58}-{now_ms}-{nonce_hex}");
         let collides = self
             .matches
             .contains(&match_id)
@@ -317,79 +319,37 @@ impl LobbyState {
 
     pub(crate) fn on_match_finished_inner(
         &mut self,
-        match_id_or_context: &str,
+        match_id: &str,
         winner: &str,
         loser: &str,
         finished_ms: u64,
     ) -> Result<(), GameError> {
-        // 1. Resolve the lobby's match_id. Game-context xcalls send their own
-        //    locally-synthesized id (`match-{ts}-1`) which doesn't match the
-        //    lobby's `{p1}-{p2}-{ms}` scheme, so fall back to a context_id
-        //    lookup if the direct map lookup misses. Stats and history are
-        //    always recorded — failing to update the summary here would lose
-        //    the entire match outcome.
-        let resolved = self.resolve_match_id(match_id_or_context)?;
+        // Direct map lookup. The game context now receives the lobby-issued
+        // match_id at init time and echoes it back here, so the
+        // resolve-by-context-id fallback the previous version needed is gone.
+        let mut summary = self
+            .matches
+            .get(&match_id.to_string())
+            .map_err(|_| GameError::Invalid("matches.get failed"))?
+            .ok_or(GameError::Invalid("unknown match_id"))?;
+        summary.status = MatchStatus::Finished;
+        summary.winner = Some(winner.to_string());
+        self.matches
+            .insert(match_id.to_string(), summary)
+            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
 
-        if let Some(mid) = resolved.as_ref() {
-            let mut summary = self
-                .matches
-                .get(mid)
-                .map_err(|_| GameError::Invalid("matches.get failed"))?
-                .ok_or(GameError::Invalid(
-                    "matches.get returned None after resolve",
-                ))?;
-            summary.status = MatchStatus::Finished;
-            summary.winner = Some(winner.to_string());
-            self.matches
-                .insert(mid.clone(), summary)
-                .map_err(|_| GameError::Invalid("matches.insert failed"))?;
-        }
-        // If `resolved` is None, the summary update is skipped but stats and
-        // history still get recorded against whatever id the caller supplied.
-
-        // 2. Append history record (use the resolved id if we found one,
-        //    otherwise the raw input).
-        let history_match_id = resolved
-            .clone()
-            .unwrap_or_else(|| match_id_or_context.to_string());
         self.history
             .push(MatchRecord {
-                match_id: history_match_id,
+                match_id: match_id.to_string(),
                 winner: winner.to_string(),
                 loser: loser.to_string(),
                 finished_ms,
             })
             .map_err(|_| GameError::Invalid("history.push failed"))?;
 
-        // 3. Counter-backed stat updates.
         bump_stats(&mut self.player_stats, winner, true)?;
         bump_stats(&mut self.player_stats, loser, false)?;
         Ok(())
-    }
-
-    /// Returns the lobby's match_id if the input matches one directly, or
-    /// the match_id of a summary whose `context_id` equals the input.
-    /// Returns `Ok(None)` if no match is found (caller decides what to do).
-    fn resolve_match_id(&self, match_id_or_context: &str) -> Result<Option<String>, GameError> {
-        // Direct hit on the matches map.
-        if self
-            .matches
-            .contains(&match_id_or_context.to_string())
-            .map_err(|_| GameError::Invalid("matches.contains failed"))?
-        {
-            return Ok(Some(match_id_or_context.to_string()));
-        }
-        // Reverse scan by context_id.
-        let entries = self
-            .matches
-            .entries()
-            .map_err(|_| GameError::Invalid("matches.entries failed"))?;
-        for (mid, summary) in entries {
-            if summary.context_id.as_deref() == Some(match_id_or_context) {
-                return Ok(Some(mid));
-            }
-        }
-        Ok(None)
     }
 }
 
@@ -454,28 +414,38 @@ mod tests {
     }
 
     #[test]
-    fn create_match_uses_composed_id() {
-        // The implementation reads env::time_now() and env::executor_id(); in a unit
-        // test environment those return deterministic or zeroed values. This test
-        // documents the expected format rather than a specific value.
+    fn create_match_uses_creator_ts_nonce_id() {
+        // The match_id format is `{creator_b58}-{ts}-{nonce_hex}` —
+        // creator key + lobby clock + 32-bit random nonce. Player2's key
+        // is no longer in the id (the lobby summary keeps it separately).
         let mut state = LobbyState::init();
         let caller_b58 = bs58::encode([1u8; 32]).into_string();
         let player2_b58 = bs58::encode([2u8; 32]).into_string();
         let id = state
-            .create_match_with_clock(&caller_b58, &player2_b58, 1_700_000_000_000)
+            .create_match_with_id(&caller_b58, &player2_b58, 1_700_000_000_000, "deadbeef")
             .unwrap();
-        assert!(id.starts_with(&format!("{caller_b58}-{player2_b58}-")));
-        assert!(state.matches.contains(&id).unwrap());
+        assert_eq!(id, format!("{caller_b58}-1700000000000-deadbeef"));
+        assert!(
+            !id.contains(&player2_b58),
+            "player2 should not be in the match-id"
+        );
+        let summary = state.matches.get(&id).unwrap().unwrap();
+        assert_eq!(summary.player2, player2_b58);
     }
 
     #[test]
-    fn create_match_rejects_collision() {
+    fn create_match_rejects_nonce_collision_defensive() {
+        // Same (creator, ts, nonce_hex) tuple should be rejected. With a
+        // 32-bit random nonce in the real path this is astronomically unlikely,
+        // but the defensive guard remains.
         let mut state = LobbyState::init();
         let a = bs58::encode([1u8; 32]).into_string();
         let b = bs58::encode([2u8; 32]).into_string();
         let ts = 1_700_000_000_000u64;
-        let _ = state.create_match_with_clock(&a, &b, ts).unwrap();
-        let err = state.create_match_with_clock(&a, &b, ts).unwrap_err();
+        let _ = state.create_match_with_id(&a, &b, ts, "abcd1234").unwrap();
+        let err = state
+            .create_match_with_id(&a, &b, ts, "abcd1234")
+            .unwrap_err();
         assert!(matches!(err, GameError::MatchIdCollision));
     }
 
@@ -485,7 +455,7 @@ mod tests {
         let a = bs58::encode([1u8; 32]).into_string();
         let b = bs58::encode([2u8; 32]).into_string();
         let id = state
-            .create_match_with_clock(&a, &b, 1_700_000_000_000)
+            .create_match_with_id(&a, &b, 1_700_000_000_000, "deadbeef")
             .unwrap();
         state.set_match_context_id_inner(&id, "ctx_abc").unwrap();
         let summary = state.matches.get(&id).unwrap().unwrap();
@@ -499,7 +469,7 @@ mod tests {
         let winner = bs58::encode([1u8; 32]).into_string();
         let loser = bs58::encode([2u8; 32]).into_string();
         let id = state
-            .create_match_with_clock(&winner, &loser, 1_700_000_000_000)
+            .create_match_with_id(&winner, &loser, 1_700_000_000_000, "deadbeef")
             .unwrap();
         state
             .on_match_finished_inner(&id, &winner, &loser, 1_700_000_000_999)
@@ -527,7 +497,7 @@ mod tests {
         let mut state = LobbyState::init();
         let a = bs58::encode([1u8; 32]).into_string();
         let err = state
-            .create_match_with_clock(&a, &a, 1_700_000_000_000)
+            .create_match_with_id(&a, &a, 1_700_000_000_000, "deadbeef")
             .unwrap_err();
         assert!(matches!(err, GameError::Invalid(_)));
     }
@@ -537,7 +507,7 @@ mod tests {
         let mut state = LobbyState::init();
         let a = bs58::encode([1u8; 32]).into_string();
         let err = state
-            .create_match_with_clock(&a, "!!!not-base58!!!", 1_700_000_000_000)
+            .create_match_with_id(&a, "!!!not-base58!!!", 1_700_000_000_000, "deadbeef")
             .unwrap_err();
         assert!(matches!(err, GameError::Invalid(_)));
     }
@@ -548,10 +518,9 @@ mod tests {
         let a = bs58::encode([1u8; 32]).into_string();
         let b = bs58::encode([2u8; 32]).into_string();
         let id = state
-            .create_match_with_clock(&a, &b, 1_700_000_000_000)
+            .create_match_with_id(&a, &b, 1_700_000_000_000, "deadbeef")
             .unwrap();
         state.set_match_context_id_inner(&id, "ctx_abc").unwrap();
-        // Second call finds the match in Active, not Pending — must reject.
         let err = state
             .set_match_context_id_inner(&id, "ctx_xyz")
             .unwrap_err();
@@ -559,32 +528,17 @@ mod tests {
     }
 
     #[test]
-    fn on_match_finished_resolves_by_context_id_when_match_id_is_unknown() {
-        // Mirrors the cross-context xcall path: the game's locally-synthesized
-        // match_id ("match-{ts}-1") never matches the lobby's "{p1}-{p2}-{ms}"
-        // scheme, so the lobby must fall back to the context_id reverse scan.
+    fn on_match_finished_rejects_unknown_match_id() {
+        // The lobby-issued id is now passed into game::init and echoed back
+        // in the on_match_finished xcall, so an unknown id is a real error
+        // instead of being silently resolved via a context-id reverse scan.
         let mut state = LobbyState::init();
         let winner = bs58::encode([1u8; 32]).into_string();
         let loser = bs58::encode([2u8; 32]).into_string();
-        let lobby_match_id = state
-            .create_match_with_clock(&winner, &loser, 1_700_000_000_000)
-            .unwrap();
-        let game_ctx_id = "game-ctx-abc";
-        state
-            .set_match_context_id_inner(&lobby_match_id, game_ctx_id)
-            .unwrap();
-
-        // xcall sends the game's context_id, NOT the lobby's match_id.
-        state
-            .on_match_finished_inner(game_ctx_id, &winner, &loser, 1_700_000_000_999)
-            .unwrap();
-
-        let summary = state.matches.get(&lobby_match_id).unwrap().unwrap();
-        assert!(matches!(summary.status, MatchStatus::Finished));
-        assert_eq!(summary.winner.as_deref(), Some(winner.as_str()));
-        let stats = state.player_stats.get(&winner).unwrap().unwrap();
-        assert_eq!(stats.wins.value_unsigned().unwrap(), 1);
-        assert_eq!(state.history.len().unwrap(), 1);
+        let err = state
+            .on_match_finished_inner("does-not-exist", &winner, &loser, 1_700_000_000_999)
+            .unwrap_err();
+        assert!(matches!(err, GameError::Invalid(_)));
     }
 
     #[test]
@@ -593,7 +547,7 @@ mod tests {
         let winner = bs58::encode([1u8; 32]).into_string();
         let loser = bs58::encode([2u8; 32]).into_string();
         let id = state
-            .create_match_with_clock(&winner, &loser, 1_700_000_000_000)
+            .create_match_with_id(&winner, &loser, 1_700_000_000_000, "deadbeef")
             .unwrap();
         state
             .on_match_finished_inner(&id, &winner, &loser, 1_700_000_000_999)

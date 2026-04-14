@@ -606,6 +606,12 @@
             "kind": "string"
           },
           "nullable": true
+        },
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
         }
       ],
       "returns": {

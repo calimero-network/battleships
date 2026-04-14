@@ -112,16 +112,25 @@ pub struct GameState {
 #[app::logic]
 impl GameState {
     #[app::init]
-    pub fn init(player1: String, player2: String, lobby_context_id: Option<String>) -> GameState {
+    pub fn init(
+        player1: String,
+        player2: String,
+        lobby_context_id: Option<String>,
+        match_id: String,
+    ) -> GameState {
         let pk1 = PublicKey::from_base58(&player1).ok();
         let pk2 = PublicKey::from_base58(&player2).ok();
-        let match_id = pk1
-            .as_ref()
-            .zip(pk2.as_ref())
-            .map(|(_, _)| format!("match-{}-1", calimero_storage::env::time_now()));
+        // Game context echoes the lobby-issued match_id verbatim so the
+        // on_match_finished xcall lands on the lobby's matches map directly,
+        // no context-id reverse scan needed.
+        let stored_match_id = if pk1.is_some() && pk2.is_some() && !match_id.is_empty() {
+            Some(match_id)
+        } else {
+            None
+        };
         GameState {
             lobby_context_id: LwwRegister::new(lobby_context_id),
-            match_id: LwwRegister::new(match_id),
+            match_id: LwwRegister::new(stored_match_id),
             player1: LwwRegister::new(pk1.clone()),
             player2: LwwRegister::new(pk2),
             turn: LwwRegister::new(pk1),
@@ -384,16 +393,11 @@ impl GameState {
                     if let Ok(ctx_arr) = <[u8; 32]>::try_from(lobby_bytes.as_slice()) {
                         let winner_b58 = pending.shooter.to_base58();
                         let loser_b58 = caller.to_base58();
-                        // Send the game context_id as the match identifier.
-                        // The game's locally-synthesized match_id ("match-{ts}-1")
-                        // doesn't match the lobby's "{p1}-{p2}-{ms}" scheme, so
-                        // the lobby resolves the row by scanning for the
-                        // matching `MatchSummary.context_id` (see
-                        // `LobbyState::resolve_match_id`).
-                        let game_ctx_b58 =
-                            bs58::encode(calimero_sdk::env::context_id()).into_string();
+                        // The lobby-issued match_id was passed into init() and
+                        // stored verbatim, so we echo it back here for an O(1)
+                        // map lookup on the lobby side.
                         let params = calimero_sdk::serde_json::json!({
-                            "match_id": game_ctx_b58,
+                            "match_id": match_id,
                             "winner": winner_b58,
                             "loser": loser_b58,
                         });
@@ -668,7 +672,9 @@ mod tests {
 
     #[test]
     fn game_state_skeleton_fields_are_empty() {
-        let state = GameState::init("".into(), "".into(), None);
+        // Empty player keys + empty match_id → init does not populate
+        // identity fields; everything stays at the default.
+        let state = GameState::init("".into(), "".into(), None, "".into());
         assert!(state.lobby_context_id.get().is_none());
         assert!(state.match_id.get().is_none());
         assert!(state.player1.get().is_none());
@@ -704,12 +710,21 @@ mod tests {
     }
 
     #[test]
-    fn init_with_valid_players_sets_turn_to_player1() {
+    fn init_stores_lobby_match_id_verbatim() {
         let pk1 = PublicKey([1u8; 32]).to_base58();
         let pk2 = PublicKey([2u8; 32]).to_base58();
-        let state = GameState::init(pk1.clone(), pk2, Some("lobby".into()));
+        let lobby_match_id = format!("{pk1}-1700000000000-deadbeef");
+        let state = GameState::init(
+            pk1.clone(),
+            pk2,
+            Some("lobby".into()),
+            lobby_match_id.clone(),
+        );
         assert_eq!(state.turn.get().as_ref().unwrap().to_base58(), pk1);
-        assert!(state.match_id.get().is_some());
+        assert_eq!(
+            state.match_id.get().as_deref(),
+            Some(lobby_match_id.as_str())
+        );
         assert_eq!(state.lobby_context_id.get().as_deref(), Some("lobby"));
     }
 }

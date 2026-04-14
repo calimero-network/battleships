@@ -166,7 +166,7 @@ steps:
     application_id: '{{app_id}}'
     group_id: '{{match_subgroup_id}}'
     service_name: game
-    params: '{"player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}"}'
+    params: '{"player1":"{{p1_key}}","player2":"{{p2_key}}","lobby_context_id":"{{lobby_ctx_id}}","match_id":"{{match_id}}"}'
     outputs:
       match_ctx_id: contextId
       match_p1_key: memberPublicKey
