@@ -89,6 +89,10 @@ pub struct PlayerBoard {
     ships: u64,
     /// Whether the player has finished placing their ships
     placed: bool,
+    /// Commitment salt — 16 random bytes mixed into SHA256(board || salt)
+    /// at placement time (Task 7). Stored privately alongside the board so
+    /// the audit (Task 9) can recompute and verify the commitment hash.
+    salt: [u8; 16],
 }
 
 impl Default for PlayerBoard {
@@ -103,7 +107,25 @@ impl PlayerBoard {
             own: Board::new_zeroed(BOARD_SIZE),
             ships: 0,
             placed: false,
+            salt: [0u8; 16],
         }
+    }
+
+    pub fn new_with_salt(own: Board, ships: u64, placed: bool, salt: [u8; 16]) -> PlayerBoard {
+        PlayerBoard {
+            own,
+            ships,
+            placed,
+            salt,
+        }
+    }
+
+    pub fn salt(&self) -> &[u8; 16] {
+        &self.salt
+    }
+
+    pub fn set_salt(&mut self, salt: [u8; 16]) {
+        self.salt = salt;
     }
 
     pub fn place_ships(&mut self, ships: Vec<String>) -> Result<(), GameError> {
@@ -208,5 +230,31 @@ impl Default for PrivateBoards {
 impl PrivateBoards {
     pub fn key(match_id: &str) -> String {
         match_id.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn player_board_default_has_zero_salt() {
+        let pb = PlayerBoard::default();
+        assert_eq!(pb.salt(), &[0u8; 16]);
+    }
+
+    #[test]
+    fn player_board_stores_custom_salt() {
+        let board = Board::new_zeroed(BOARD_SIZE);
+        let pb = PlayerBoard::new_with_salt(board, 0, false, [7u8; 16]);
+        assert_eq!(pb.salt(), &[7u8; 16]);
+    }
+
+    #[test]
+    fn player_board_set_salt_updates_field() {
+        let mut pb = PlayerBoard::new();
+        assert_eq!(pb.salt(), &[0u8; 16]);
+        pb.set_salt([42u8; 16]);
+        assert_eq!(pb.salt(), &[42u8; 16]);
     }
 }

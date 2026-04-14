@@ -373,6 +373,13 @@
           "type": {
             "kind": "bool"
           }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "kind": "bytes",
+            "size": 16
+          }
         }
       ]
     },
