@@ -568,4 +568,151 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, GameError::Invalid(_)));
     }
+
+    // ------------------------------------------------------------------
+    // CRDT merge tests (review point 6).
+    //
+    // These exercise the hand-rolled `Mergeable` impls on `MatchSummary`
+    // and `MatchRecord` directly — the place the rank-clobber bug lived.
+    // Every hand-written merge is a correctness burden; these tests pin
+    // its current contract so future edits can't silently break it.
+    //
+    // What we explicitly do NOT cover here (would need a multi-actor
+    // test harness, not yet exposed by Calimero for unit tests):
+    //   - Counter merge across replicas with distinct executor identities.
+    //   - UnorderedMap<[u8;1], LwwRegister<u8>> divergence on the same
+    //     key from two nodes (per-cell LWW resolution).
+    //   - GameState LwwRegister merges (these ride on the SDK's
+    //     well-tested derive impl; not our code under test).
+    // Those are exercised end-to-end by the merobox workflow.
+    // ------------------------------------------------------------------
+
+    fn sample_summary(
+        match_id: &str,
+        status: MatchStatus,
+        ctx: Option<&str>,
+        winner: Option<&str>,
+    ) -> MatchSummary {
+        MatchSummary {
+            match_id: match_id.to_string(),
+            player1: "p1".into(),
+            player2: "p2".into(),
+            status,
+            context_id: ctx.map(str::to_string),
+            winner: winner.map(str::to_string),
+            created_ms: 1_700_000_000_000,
+        }
+    }
+
+    #[test]
+    fn merge_match_summary_advances_status_pending_to_active() {
+        let mut a = sample_summary("m-1", MatchStatus::Pending, None, None);
+        let b = sample_summary("m-1", MatchStatus::Active, Some("ctx-from-b"), None);
+        a.merge(&b).unwrap();
+        assert!(matches!(a.status, MatchStatus::Active));
+        assert_eq!(a.context_id.as_deref(), Some("ctx-from-b"));
+    }
+
+    #[test]
+    fn merge_match_summary_advances_status_pending_to_finished() {
+        let mut a = sample_summary("m-1", MatchStatus::Pending, None, None);
+        let b = sample_summary("m-1", MatchStatus::Finished, None, Some("p1"));
+        a.merge(&b).unwrap();
+        assert!(matches!(a.status, MatchStatus::Finished));
+        assert_eq!(a.winner.as_deref(), Some("p1"));
+    }
+
+    #[test]
+    fn merge_match_summary_carries_context_id_when_self_is_none() {
+        let mut a = sample_summary("m-1", MatchStatus::Active, None, None);
+        let b = sample_summary("m-1", MatchStatus::Active, Some("ctx-b"), None);
+        a.merge(&b).unwrap();
+        assert_eq!(a.context_id.as_deref(), Some("ctx-b"));
+    }
+
+    #[test]
+    fn merge_match_summary_carries_winner_when_self_is_none() {
+        let mut a = sample_summary("m-1", MatchStatus::Finished, None, None);
+        let b = sample_summary("m-1", MatchStatus::Finished, None, Some("p2"));
+        a.merge(&b).unwrap();
+        assert_eq!(a.winner.as_deref(), Some("p2"));
+    }
+
+    #[test]
+    fn merge_match_summary_is_idempotent() {
+        let a_orig = sample_summary("m-1", MatchStatus::Active, Some("ctx"), None);
+        let mut a = a_orig.clone();
+        a.merge(&a_orig).unwrap();
+        assert!(matches!(a.status, MatchStatus::Active));
+        assert_eq!(a.context_id.as_deref(), Some("ctx"));
+        assert_eq!(a.winner, None);
+        assert_eq!(a.match_id, a_orig.match_id);
+    }
+
+    #[test]
+    fn merge_match_summary_equal_rank_different_winner_is_not_commutative() {
+        // KNOWN LIMITATION (review point 1): with two Finished summaries
+        // carrying different winners, the hand-rolled merge keeps `self`'s
+        // value because `self.winner.is_some()` is true for both. This
+        // means merge(a, b) ≠ merge(b, a) — a CRDT lattice violation.
+        //
+        // In practice winner is single-writer (the xcall from the game
+        // context runs once per match), so this case shouldn't arise. Point
+        // 1 of the review proposes fixing this by decomposing MatchSummary
+        // into per-field CRDTs (winner: LwwRegister<Option<String>>) so
+        // the lattice property comes from the SDK by construction. Until
+        // then this test pins the actual behavior so a regression here is
+        // a deliberate change, not a silent break.
+        let mut left = sample_summary("m-1", MatchStatus::Finished, None, Some("alice"));
+        let right = sample_summary("m-1", MatchStatus::Finished, None, Some("bob"));
+        left.merge(&right).unwrap();
+        assert_eq!(
+            left.winner.as_deref(),
+            Some("alice"),
+            "self-wins under current impl"
+        );
+
+        let mut other = sample_summary("m-1", MatchStatus::Finished, None, Some("bob"));
+        let left2 = sample_summary("m-1", MatchStatus::Finished, None, Some("alice"));
+        other.merge(&left2).unwrap();
+        assert_eq!(
+            other.winner.as_deref(),
+            Some("bob"),
+            "self-wins under current impl"
+        );
+        // The two outcomes disagree → not commutative. Acknowledged.
+    }
+
+    #[test]
+    fn merge_match_record_keeps_later_finished_ms() {
+        let mut a = MatchRecord {
+            match_id: "m-1".into(),
+            winner: "p1".into(),
+            loser: "p2".into(),
+            finished_ms: 100,
+        };
+        let b = MatchRecord {
+            match_id: "m-1".into(),
+            winner: "p1".into(),
+            loser: "p2".into(),
+            finished_ms: 200,
+        };
+        a.merge(&b).unwrap();
+        assert_eq!(a.finished_ms, 200);
+    }
+
+    #[test]
+    fn merge_match_record_is_idempotent() {
+        let a_orig = MatchRecord {
+            match_id: "m-1".into(),
+            winner: "p1".into(),
+            loser: "p2".into(),
+            finished_ms: 150,
+        };
+        let mut a = a_orig.clone();
+        a.merge(&a_orig).unwrap();
+        assert_eq!(a.finished_ms, 150);
+        assert_eq!(a.winner, "p1");
+        assert_eq!(a.loser, "p2");
+    }
 }
