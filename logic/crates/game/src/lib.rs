@@ -385,8 +385,16 @@ impl GameState {
                     if let Ok(ctx_arr) = <[u8; 32]>::try_from(lobby_bytes.as_slice()) {
                         let winner_b58 = pending.shooter.to_base58();
                         let loser_b58 = caller.to_base58();
+                        // Send the game context_id as the match identifier.
+                        // The game's locally-synthesized match_id ("match-{ts}-1")
+                        // doesn't match the lobby's "{p1}-{p2}-{ms}" scheme, so
+                        // the lobby resolves the row by scanning for the
+                        // matching `MatchSummary.context_id` (see
+                        // `LobbyState::resolve_match_id`).
+                        let game_ctx_b58 =
+                            bs58::encode(calimero_sdk::env::context_id()).into_string();
                         let params = calimero_sdk::serde_json::json!({
-                            "match_id": match_id,
+                            "match_id": game_ctx_b58,
                             "winner": winner_b58,
                             "loser": loser_b58,
                         });
@@ -510,11 +518,7 @@ impl GameState {
         }
         let board: board::Board = calimero_sdk::borsh::from_slice(&board_bytes)
             .map_err(|e| AppError::msg(format!("deserialize board: {e}")))?;
-        let ship_count = board
-            .0
-            .iter()
-            .filter(|&&c| Cell::from_u8(c) == Cell::Ship)
-            .count() as u64;
+        let ship_count = board.0.iter().filter(|&&c| is_ship_cell(c)).count() as u64;
         let mut priv_boards = PrivateBoards::private_load_or_default()?;
         let mut priv_mut = priv_boards.as_mut();
         priv_mut.boards.insert(

@@ -10,6 +10,7 @@ use calimero_storage::collections::{LwwRegister, UnorderedMap};
 use sha2::{Digest, Sha256};
 
 use crate::board::{Cell, BOARD_SIZE};
+use crate::is_ship_cell;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AuditFailure {
@@ -71,7 +72,7 @@ pub fn replay_shots(
         if idx >= own_board_cells.len() {
             continue;
         }
-        let actual_is_ship = Cell::from_u8(own_board_cells[idx]) == Cell::Ship;
+        let actual_is_ship = is_ship_cell(own_board_cells[idx]);
         let recorded = Cell::from_u8(cell_u8);
         match recorded {
             Cell::Hit if !actual_is_ship => {

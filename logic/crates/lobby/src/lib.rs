@@ -315,27 +315,44 @@ impl LobbyState {
 
     pub(crate) fn on_match_finished_inner(
         &mut self,
-        match_id: &str,
+        match_id_or_context: &str,
         winner: &str,
         loser: &str,
         finished_ms: u64,
     ) -> Result<(), GameError> {
-        // 1. Finalize the summary.
-        let mut summary = self
-            .matches
-            .get(&match_id.to_string())
-            .map_err(|_| GameError::Invalid("matches.get failed"))?
-            .ok_or(GameError::Invalid("unknown match_id"))?;
-        summary.status = MatchStatus::Finished;
-        summary.winner = Some(winner.to_string());
-        self.matches
-            .insert(match_id.to_string(), summary)
-            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+        // 1. Resolve the lobby's match_id. Game-context xcalls send their own
+        //    locally-synthesized id (`match-{ts}-1`) which doesn't match the
+        //    lobby's `{p1}-{p2}-{ms}` scheme, so fall back to a context_id
+        //    lookup if the direct map lookup misses. Stats and history are
+        //    always recorded — failing to update the summary here would lose
+        //    the entire match outcome.
+        let resolved = self.resolve_match_id(match_id_or_context)?;
 
-        // 2. Append history record.
+        if let Some(mid) = resolved.as_ref() {
+            let mut summary = self
+                .matches
+                .get(mid)
+                .map_err(|_| GameError::Invalid("matches.get failed"))?
+                .ok_or(GameError::Invalid(
+                    "matches.get returned None after resolve",
+                ))?;
+            summary.status = MatchStatus::Finished;
+            summary.winner = Some(winner.to_string());
+            self.matches
+                .insert(mid.clone(), summary)
+                .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+        }
+        // If `resolved` is None, the summary update is skipped but stats and
+        // history still get recorded against whatever id the caller supplied.
+
+        // 2. Append history record (use the resolved id if we found one,
+        //    otherwise the raw input).
+        let history_match_id = resolved
+            .clone()
+            .unwrap_or_else(|| match_id_or_context.to_string());
         self.history
             .push(MatchRecord {
-                match_id: match_id.to_string(),
+                match_id: history_match_id,
                 winner: winner.to_string(),
                 loser: loser.to_string(),
                 finished_ms,
@@ -346,6 +363,31 @@ impl LobbyState {
         bump_stats(&mut self.player_stats, winner, true)?;
         bump_stats(&mut self.player_stats, loser, false)?;
         Ok(())
+    }
+
+    /// Returns the lobby's match_id if the input matches one directly, or
+    /// the match_id of a summary whose `context_id` equals the input.
+    /// Returns `Ok(None)` if no match is found (caller decides what to do).
+    fn resolve_match_id(&self, match_id_or_context: &str) -> Result<Option<String>, GameError> {
+        // Direct hit on the matches map.
+        if self
+            .matches
+            .contains(&match_id_or_context.to_string())
+            .map_err(|_| GameError::Invalid("matches.contains failed"))?
+        {
+            return Ok(Some(match_id_or_context.to_string()));
+        }
+        // Reverse scan by context_id.
+        let entries = self
+            .matches
+            .entries()
+            .map_err(|_| GameError::Invalid("matches.entries failed"))?;
+        for (mid, summary) in entries {
+            if summary.context_id.as_deref() == Some(match_id_or_context) {
+                return Ok(Some(mid));
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -512,6 +554,35 @@ mod tests {
             .set_match_context_id_inner(&id, "ctx_xyz")
             .unwrap_err();
         assert!(matches!(err, GameError::Invalid(_)));
+    }
+
+    #[test]
+    fn on_match_finished_resolves_by_context_id_when_match_id_is_unknown() {
+        // Mirrors the cross-context xcall path: the game's locally-synthesized
+        // match_id ("match-{ts}-1") never matches the lobby's "{p1}-{p2}-{ms}"
+        // scheme, so the lobby must fall back to the context_id reverse scan.
+        let mut state = LobbyState::init();
+        let winner = bs58::encode([1u8; 32]).into_string();
+        let loser = bs58::encode([2u8; 32]).into_string();
+        let lobby_match_id = state
+            .create_match_with_clock(&winner, &loser, 1_700_000_000_000)
+            .unwrap();
+        let game_ctx_id = "game-ctx-abc";
+        state
+            .set_match_context_id_inner(&lobby_match_id, game_ctx_id)
+            .unwrap();
+
+        // xcall sends the game's context_id, NOT the lobby's match_id.
+        state
+            .on_match_finished_inner(game_ctx_id, &winner, &loser, 1_700_000_000_999)
+            .unwrap();
+
+        let summary = state.matches.get(&lobby_match_id).unwrap().unwrap();
+        assert!(matches!(summary.status, MatchStatus::Finished));
+        assert_eq!(summary.winner.as_deref(), Some(winner.as_str()));
+        let stats = state.player_stats.get(&winner).unwrap().unwrap();
+        assert_eq!(stats.wins.value_unsigned().unwrap(), 1);
+        assert_eq!(state.history.len().unwrap(), 1);
     }
 
     #[test]
