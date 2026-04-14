@@ -110,6 +110,28 @@ steps:
     statements:
       - 'is_set({{match_id}})'
 
+  # Negative-path coverage for create_match validation (added for the
+  # CRDT migration — self-match rejection and malformed-base58 rejection).
+  - name: Reject Self-Match Creation
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: create_match
+    executor_public_key: '{{p1_key}}'
+    args:
+      player2: '{{p1_key}}'
+    expected_failure: true
+
+  - name: Reject Non-Base58 Player2
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: create_match
+    executor_public_key: '{{p1_key}}'
+    args:
+      player2: '!!!not-a-valid-base58-key!!!'
+    expected_failure: true
+
   # The frontend creates a per-match subgroup inside the namespace, then
   # creates the match context inside that subgroup. Mirror that flow here.
   - name: Create Match Subgroup in Namespace
@@ -260,6 +282,58 @@ steps:
     context_id: '{{match_ctx_id}}'
     timeout: 30
 
+  # Reject a second place_ships from the same player — commitment is
+  # write-once per executor (CRDT migration: AlreadyCommitted guard).
+  - name: Reject Second Placement by P1 (AlreadyCommitted)
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: place_ships
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+      ships:
+        - '0,0;1,0'
+        - '0,2;1,2;2,2'
+        - '0,4;1,4;2,4'
+        - '0,6;1,6;2,6;3,6'
+        - '0,8;1,8;2,8;3,8;4,8'
+    expected_failure: true
+
+  # Verify cross-device durability hooks: export returns board_bytes + salt,
+  # keyed against the caller's published commitment.
+  - name: Export Board Seed for P1
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: export_board_seed
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+    outputs:
+      p1_seed: result.output
+
+  - name: Assert P1 Seed Exported
+    type: assert
+    statements:
+      - 'is_set({{p1_seed}})'
+
+  - name: Export Board Seed for P2
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: export_board_seed
+    executor_public_key: '{{match_p2_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+    outputs:
+      p2_seed: result.output
+
+  - name: Assert P2 Seed Exported
+    type: assert
+    statements:
+      - 'is_set({{p2_seed}})'
+
   # Verify board state after placement
   - name: Player 1 Checks Own Board
     type: call
@@ -386,5 +460,45 @@ steps:
     type: assert
     statements:
       - 'is_set({{matches_n2}})'
+
+  # ============================================================
+  # Phase F: Commitment Scheme — Reveal & Audit
+  # ============================================================
+  # Both players reveal their pristine boards and the contract recomputes
+  # SHA256(pristine || salt) against the published commitment AND replays
+  # every shot recorded against them against the revealed board. This is
+  # the same audit path exercised at match end on the winning shot.
+
+  - name: Player 1 Reveals Board (Audit)
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: reveal_board
+    executor_public_key: '{{match_p1_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+
+  - name: Player 2 Reveals Board (Audit)
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: reveal_board
+    executor_public_key: '{{match_p2_key}}'
+    args:
+      match_id: '{{game_match_id}}'
+
+  # Reject relinking an already-Active match — set_match_context_id now
+  # guards against any non-Pending transition (prevents Finished matches
+  # being silently reactivated).
+  - name: Reject Re-Link of Active Match
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: set_match_context_id
+    executor_public_key: '{{p1_key}}'
+    args:
+      match_id: '{{match_id}}'
+      context_id: '{{match_ctx_id}}'
+    expected_failure: true
 
 stop_all_nodes: false
