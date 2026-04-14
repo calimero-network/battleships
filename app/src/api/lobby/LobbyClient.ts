@@ -11,11 +11,14 @@ export interface Event_MatchCreated {
   id: string;
 }
 
+export interface Event_MatchIdCollision {
+  attempted_id: string;
+}
+
 export interface LobbyState {
-  id_nonce: number;
   created_ms: number;
-  matches: MatchSummary[];
-  player_stats: PlayerStatsEntry[];
+  matches: Record<string, MatchSummary>;
+  player_stats: Record<string, PlayerStats>;
   history: MatchRecord[];
 }
 
@@ -41,27 +44,31 @@ export interface MatchSummary {
   match_id: string;
   player1: string;
   player2: string;
-  status: 'Pending' | 'Active' | 'Finished';
+  status: MatchStatus;
   context_id: string | null;
   winner: string | null;
+  created_ms: number;
 }
 
 export interface PlayerStats {
-  matches_played: number;
-  wins: number;
-  losses: number;
+  wins: {  };
+  losses: {  };
+  games_played: {  };
 }
 
-export interface PlayerStatsEntry {
-  player: string;
-  stats: PlayerStats;
+export interface PlayerStatsView {
+  wins: number;
+  losses: number;
+  games_played: number;
 }
+
 
 
 
 
 export type AbiEvent =
   | { name: "MatchCreated"; payload: Event_MatchCreated }
+  | { name: "MatchIdCollision"; payload: Event_MatchIdCollision }
   | { name: "MatchListUpdated" }
   | { name: "PlayerStatsUpdated" }
 ;
@@ -209,9 +216,9 @@ export class LobbyClient {
   /**
    * get_player_stats
    */
-  public async getPlayerStats(params: { player: string }): Promise<PlayerStats> {
+  public async getPlayerStats(params: { player: string }): Promise<PlayerStatsView> {
     const response = await this.mero.rpc.execute({ contextId: this.contextId, method: 'get_player_stats', argsJson: params, executorPublicKey: this.executorPublicKey });
-    return response as PlayerStats;
+    return response as PlayerStatsView;
   }
 
   /**

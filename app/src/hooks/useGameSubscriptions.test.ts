@@ -191,12 +191,27 @@ describe('getGameEventEffects', () => {
 describe('isLobbyEvent / isMatchEvent', () => {
   const lobbyEvents: AllGameEvents[] = [
     { type: 'MatchCreated', id: 'x' },
+    { type: 'MatchIdCollision', id: 'x', attempted_id: 'x' },
     { type: 'MatchListUpdated', id: '' },
     { type: 'PlayerStatsUpdated', id: '' },
   ];
 
   const matchEvents: AllGameEvents[] = [
     { type: 'ShipsPlaced', id: 'x' },
+    {
+      type: 'BoardCommitted',
+      id: 'x',
+      player: 'pk',
+      commitment: 'a'.repeat(64),
+    },
+    { type: 'BoardRevealed', id: 'x', player: 'pk' },
+    { type: 'AuditPassed', id: 'x', player: 'pk' },
+    {
+      type: 'AuditFailed',
+      id: 'x',
+      player: 'pk',
+      reason: 'commitment_mismatch',
+    },
     { type: 'ShotProposed', id: 'x', x: 0, y: 0 },
     { type: 'ShotFired', id: 'x', x: 0, y: 0, result: 'miss' },
     { type: 'Winner', id: 'x' },
@@ -215,5 +230,90 @@ describe('isLobbyEvent / isMatchEvent', () => {
       expect(isMatchEvent(event)).toBe(true);
       expect(isLobbyEvent(event)).toBe(false);
     }
+  });
+});
+
+describe('CRDT-migration event parsers', () => {
+  it('parses BoardCommitted with id, player, commitment', () => {
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'BoardCommitted',
+        id: 'm-1',
+        player: 'pk-1',
+        commitment: 'a'.repeat(64),
+      }),
+    ).toEqual({
+      type: 'BoardCommitted',
+      id: 'm-1',
+      player: 'pk-1',
+      commitment: 'a'.repeat(64),
+    });
+  });
+
+  it('parses AuditPassed and AuditFailed', () => {
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'AuditPassed',
+        id: 'm-1',
+        player: 'pk-1',
+      }),
+    ).toEqual({ type: 'AuditPassed', id: 'm-1', player: 'pk-1' });
+
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'AuditFailed',
+        id: 'm-1',
+        player: 'pk-1',
+        reason: 'shot_inconsistent',
+      }),
+    ).toEqual({
+      type: 'AuditFailed',
+      id: 'm-1',
+      player: 'pk-1',
+      reason: 'shot_inconsistent',
+    });
+  });
+
+  it('maps MatchIdCollision attempted_id into the GameEvent.id slot', () => {
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'MatchIdCollision',
+        attempted_id: 'pk1-pk2-12345',
+      }),
+    ).toEqual({
+      type: 'MatchIdCollision',
+      id: 'pk1-pk2-12345',
+      attempted_id: 'pk1-pk2-12345',
+    });
+  });
+
+  it('rejects partial AuditFailed payloads (missing reason)', () => {
+    expect(
+      parseSubscriptionEvent({
+        event_type: 'AuditFailed',
+        id: 'm-1',
+        player: 'pk-1',
+      }),
+    ).toBeNull();
+  });
+
+  it('classifies new events as no-op for board/turn refresh', () => {
+    expect(
+      getGameEventEffects({
+        type: 'BoardCommitted',
+        id: 'm-1',
+        player: 'pk-1',
+        commitment: 'b'.repeat(64),
+      }),
+    ).toEqual({ board: 'debounced', turn: 'none' });
+
+    expect(
+      getGameEventEffects({
+        type: 'AuditFailed',
+        id: 'm-1',
+        player: 'pk-1',
+        reason: 'commitment_mismatch',
+      }),
+    ).toEqual({ board: 'none', turn: 'none' });
   });
 });

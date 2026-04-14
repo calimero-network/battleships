@@ -44,7 +44,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "codegen": "calimero-abi-codegen -i ../logic/crates/lobby/res/abi.json -o src/api/lobby --client-name LobbyClient && calimero-abi-codegen -i ../logic/crates/game/res/abi.json -o src/api/game --client-name GameClient",
+    "codegen": "calimero-abi-codegen -i ../logic/crates/lobby/res/abi.json -o src/api/lobby --client-name LobbyClient && calimero-abi-codegen -i ../logic/crates/game/res/abi.json -o src/api/game --client-name GameClient && node scripts/postcodegen.mjs",
     "lint": "concurrently \"pnpm:lint:*(!fix)\"",
     "lint:src": "eslint . --ext .ts,.tsx src --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "concurrently \"pnpm:lint:*:fix\"",
