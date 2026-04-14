@@ -257,7 +257,7 @@ export class GameClient {
   /**
    * init
    */
-  public async init(params: { player1: string; player2: string; lobby_context_id: string | null }): Promise<void> {
+  public async init(params: { player1: string; player2: string; lobby_context_id: string | null; match_id: string }): Promise<void> {
     const response = await this._mero.rpc.execute({ contextId: this._contextId, method: 'init', argsJson: params, executorPublicKey: this._executorPublicKey });
     return response as void;
   }

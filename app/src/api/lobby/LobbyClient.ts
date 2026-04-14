@@ -43,7 +43,6 @@ export interface MatchSummary {
 export interface PlayerStats {
   wins: {  };
   losses: {  };
-  games_played: {  };
 }
 
 export interface PlayerStatsView {
