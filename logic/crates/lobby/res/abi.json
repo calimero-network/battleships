@@ -185,14 +185,6 @@
             "fields": [],
             "crdt_type": "counter"
           }
-        },
-        {
-          "name": "games_played",
-          "type": {
-            "kind": "record",
-            "fields": [],
-            "crdt_type": "counter"
-          }
         }
       ]
     },

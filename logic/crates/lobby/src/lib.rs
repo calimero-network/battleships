@@ -72,7 +72,9 @@ impl Mergeable for MatchSummary {
 pub struct PlayerStats {
     pub wins: Counter,
     pub losses: Counter,
-    pub games_played: Counter,
+    // games_played is intentionally NOT stored — it's `wins + losses` by
+    // construction (every match increments exactly one), so deriving it in
+    // `to_view` removes a "can these drift?" question from the data model.
 }
 
 impl PlayerStats {
@@ -82,24 +84,22 @@ impl PlayerStats {
         PlayerStats {
             wins: Counter::new_with_field_name(&format!("stats:{player_key}:wins")),
             losses: Counter::new_with_field_name(&format!("stats:{player_key}:losses")),
-            games_played: Counter::new_with_field_name(&format!("stats:{player_key}:games")),
         }
     }
 
     pub(crate) fn to_view(&self) -> Result<PlayerStatsView, GameError> {
+        let wins = self
+            .wins
+            .value_unsigned()
+            .map_err(|_| GameError::Invalid("wins read"))?;
+        let losses = self
+            .losses
+            .value_unsigned()
+            .map_err(|_| GameError::Invalid("losses read"))?;
         Ok(PlayerStatsView {
-            wins: self
-                .wins
-                .value_unsigned()
-                .map_err(|_| GameError::Invalid("wins read"))?,
-            losses: self
-                .losses
-                .value_unsigned()
-                .map_err(|_| GameError::Invalid("losses read"))?,
-            games_played: self
-                .games_played
-                .value_unsigned()
-                .map_err(|_| GameError::Invalid("games read"))?,
+            wins,
+            losses,
+            games_played: wins.saturating_add(losses),
         })
     }
 }
@@ -362,10 +362,6 @@ fn bump_stats(
         .get(&player_key.to_string())
         .map_err(|_| GameError::Invalid("stats.get failed"))?
         .unwrap_or_else(|| PlayerStats::new(player_key));
-    stats
-        .games_played
-        .increment()
-        .map_err(|_| GameError::Invalid("games_played.increment failed"))?;
     if is_winner {
         stats
             .wins
@@ -393,18 +389,19 @@ mod tests {
         let stats = PlayerStats::new("alice_b58");
         assert_eq!(stats.wins.value_unsigned().unwrap(), 0);
         assert_eq!(stats.losses.value_unsigned().unwrap(), 0);
-        assert_eq!(stats.games_played.value_unsigned().unwrap(), 0);
+        assert_eq!(stats.to_view().unwrap().games_played, 0);
     }
 
     #[test]
     fn player_stats_increments_accumulate() {
         let mut stats = PlayerStats::new("alice_b58");
         stats.wins.increment().unwrap();
-        stats.games_played.increment().unwrap();
-        stats.games_played.increment().unwrap();
+        stats.losses.increment().unwrap();
+        stats.losses.increment().unwrap();
         assert_eq!(stats.wins.value_unsigned().unwrap(), 1);
-        assert_eq!(stats.games_played.value_unsigned().unwrap(), 2);
-        assert_eq!(stats.losses.value_unsigned().unwrap(), 0);
+        assert_eq!(stats.losses.value_unsigned().unwrap(), 2);
+        // games_played is derived as wins + losses in the view.
+        assert_eq!(stats.to_view().unwrap().games_played, 3);
     }
 
     #[test]
@@ -479,15 +476,27 @@ mod tests {
         assert!(matches!(summary.status, MatchStatus::Finished));
         assert_eq!(summary.winner.as_deref(), Some(winner.as_str()));
 
-        let winner_stats = state.player_stats.get(&winner).unwrap().unwrap();
-        assert_eq!(winner_stats.wins.value_unsigned().unwrap(), 1);
-        assert_eq!(winner_stats.games_played.value_unsigned().unwrap(), 1);
-        assert_eq!(winner_stats.losses.value_unsigned().unwrap(), 0);
+        let winner_view = state
+            .player_stats
+            .get(&winner)
+            .unwrap()
+            .unwrap()
+            .to_view()
+            .unwrap();
+        assert_eq!(winner_view.wins, 1);
+        assert_eq!(winner_view.losses, 0);
+        assert_eq!(winner_view.games_played, 1); // derived: 1 + 0
 
-        let loser_stats = state.player_stats.get(&loser).unwrap().unwrap();
-        assert_eq!(loser_stats.losses.value_unsigned().unwrap(), 1);
-        assert_eq!(loser_stats.games_played.value_unsigned().unwrap(), 1);
-        assert_eq!(loser_stats.wins.value_unsigned().unwrap(), 0);
+        let loser_view = state
+            .player_stats
+            .get(&loser)
+            .unwrap()
+            .unwrap()
+            .to_view()
+            .unwrap();
+        assert_eq!(loser_view.wins, 0);
+        assert_eq!(loser_view.losses, 1);
+        assert_eq!(loser_view.games_played, 1); // derived: 0 + 1
 
         assert_eq!(state.history.len().unwrap(), 1);
     }
