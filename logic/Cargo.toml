@@ -5,6 +5,7 @@ resolver = "2"
 [workspace.dependencies]
 calimero-sdk = { git = "https://github.com/calimero-network/core", branch = "master" }
 calimero-storage = { git = "https://github.com/calimero-network/core", branch = "master" }
+calimero-storage-macros = { git = "https://github.com/calimero-network/core", branch = "master" }
 calimero-wasm-abi = { git = "https://github.com/calimero-network/core", branch = "master" }
 thiserror = "1.0.56"
 bs58 = "0.4"

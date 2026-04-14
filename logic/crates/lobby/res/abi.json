@@ -16,33 +16,40 @@
       "kind": "record",
       "fields": [
         {
-          "name": "id_nonce",
-          "type": {
-            "kind": "u64"
-          }
-        },
-        {
           "name": "created_ms",
           "type": {
-            "kind": "u64"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "u64"
+            }
           }
         },
         {
           "name": "matches",
           "type": {
-            "kind": "list",
-            "items": {
+            "kind": "map",
+            "key": {
+              "kind": "string"
+            },
+            "value": {
               "$ref": "MatchSummary"
-            }
+            },
+            "crdt_type": "unordered_map"
           }
         },
         {
           "name": "player_stats",
           "type": {
-            "kind": "list",
-            "items": {
-              "$ref": "PlayerStatsEntry"
-            }
+            "kind": "map",
+            "key": {
+              "kind": "string"
+            },
+            "value": {
+              "$ref": "PlayerStats"
+            },
+            "crdt_type": "unordered_map"
           }
         },
         {
@@ -51,7 +58,8 @@
             "kind": "list",
             "items": {
               "$ref": "MatchRecord"
-            }
+            },
+            "crdt_type": "vector"
           }
         }
       ]
@@ -139,6 +147,12 @@
             "kind": "string"
           },
           "nullable": true
+        },
+        {
+          "name": "created_ms",
+          "type": {
+            "kind": "u64"
+          }
         }
       ]
     },
@@ -146,44 +160,47 @@
       "kind": "record",
       "fields": [
         {
-          "name": "matches_played",
-          "type": {
-            "kind": "u64"
-          }
-        },
-        {
           "name": "wins",
           "type": {
-            "kind": "u64"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "counter"
           }
         },
         {
           "name": "losses",
           "type": {
-            "kind": "u64"
-          }
-        }
-      ]
-    },
-    "PlayerStatsEntry": {
-      "kind": "record",
-      "fields": [
-        {
-          "name": "player",
-          "type": {
-            "kind": "string"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "counter"
           }
         },
         {
-          "name": "stats",
+          "name": "games_played",
           "type": {
-            "$ref": "PlayerStats"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "counter"
           }
         }
       ]
     }
   },
   "methods": [
+    {
+      "name": "new",
+      "params": [
+        {
+          "name": "player_key",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "$ref": "PlayerStats"
+      }
+    },
     {
       "name": "init",
       "params": [],
