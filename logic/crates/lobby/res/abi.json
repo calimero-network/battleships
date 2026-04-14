@@ -222,27 +222,6 @@
   },
   "methods": [
     {
-      "name": "new",
-      "params": [
-        {
-          "name": "player_key",
-          "type": {
-            "kind": "string"
-          }
-        }
-      ],
-      "returns": {
-        "$ref": "PlayerStats"
-      }
-    },
-    {
-      "name": "to_view",
-      "params": [],
-      "returns": {
-        "$ref": "PlayerStatsView"
-      }
-    },
-    {
       "name": "init",
       "params": [],
       "returns": {

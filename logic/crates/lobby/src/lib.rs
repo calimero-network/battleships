@@ -76,7 +76,9 @@ pub struct PlayerStats {
 }
 
 impl PlayerStats {
-    pub fn new(player_key: &str) -> PlayerStats {
+    // pub(crate) so the wasm-abi emitter — which scans every `pub fn` in the
+    // crate — does NOT expose this as a Calimero method on LobbyClient.
+    pub(crate) fn new(player_key: &str) -> PlayerStats {
         PlayerStats {
             wins: Counter::new_with_field_name(&format!("stats:{player_key}:wins")),
             losses: Counter::new_with_field_name(&format!("stats:{player_key}:losses")),
@@ -84,7 +86,7 @@ impl PlayerStats {
         }
     }
 
-    pub fn to_view(&self) -> Result<PlayerStatsView, GameError> {
+    pub(crate) fn to_view(&self) -> Result<PlayerStatsView, GameError> {
         Ok(PlayerStatsView {
             wins: self
                 .wins
