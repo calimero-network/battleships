@@ -61,7 +61,6 @@ impl PublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use borsh;
 
     #[test]
     fn public_key_base58_roundtrip() {
@@ -108,7 +107,10 @@ mod tests {
 
     #[test]
     fn exported_seed_roundtrips_borsh() {
-        let seed = ExportedSeed { board_bytes: vec![1, 2, 3], salt: [7u8; 16] };
+        let seed = ExportedSeed {
+            board_bytes: vec![1, 2, 3],
+            salt: [7u8; 16],
+        };
         let bytes = borsh::to_vec(&seed).unwrap();
         let back: ExportedSeed = borsh::from_slice(&bytes).unwrap();
         assert_eq!(back.board_bytes, vec![1, 2, 3]);

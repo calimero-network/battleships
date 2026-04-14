@@ -83,6 +83,33 @@ impl PlayerStats {
             games_played: Counter::new_with_field_name(&format!("stats:{player_key}:games")),
         }
     }
+
+    pub fn to_view(&self) -> Result<PlayerStatsView, GameError> {
+        Ok(PlayerStatsView {
+            wins: self
+                .wins
+                .value_unsigned()
+                .map_err(|_| GameError::Invalid("wins read"))?,
+            losses: self
+                .losses
+                .value_unsigned()
+                .map_err(|_| GameError::Invalid("losses read"))?,
+            games_played: self
+                .games_played
+                .value_unsigned()
+                .map_err(|_| GameError::Invalid("games read"))?,
+        })
+    }
+}
+
+/// Flat snapshot of a player's stats — what consumers see over the wire.
+#[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[borsh(crate = "calimero_sdk::borsh")]
+#[serde(crate = "calimero_sdk::serde")]
+pub struct PlayerStatsView {
+    pub wins: u64,
+    pub losses: u64,
+    pub games_played: u64,
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
@@ -161,7 +188,9 @@ impl LobbyState {
             }
             Err(GameError::MatchIdCollision) => {
                 let attempted = format!("{caller_b58}-{player2}-{now}");
-                app::emit!(Event::MatchIdCollision { attempted_id: &attempted });
+                app::emit!(Event::MatchIdCollision {
+                    attempted_id: &attempted
+                });
                 Err(AppError::msg(GameError::MatchIdCollision.to_string()))
             }
             Err(e) => Err(AppError::msg(e.to_string())),
@@ -203,9 +232,28 @@ impl LobbyState {
         match_id: String,
         context_id: String,
     ) -> app::Result<()> {
-        // Implemented in Task 4.
-        let _ = (match_id, context_id);
-        todo!("task 4: set_match_context_id")
+        self.set_match_context_id_inner(&match_id, &context_id)
+            .map_err(|e| AppError::msg(e.to_string()))?;
+        app::emit!(Event::MatchListUpdated {});
+        Ok(())
+    }
+
+    pub(crate) fn set_match_context_id_inner(
+        &mut self,
+        match_id: &str,
+        context_id: &str,
+    ) -> Result<(), GameError> {
+        let mut summary = self
+            .matches
+            .get(&match_id.to_string())
+            .map_err(|_| GameError::Invalid("matches.get failed"))?
+            .ok_or(GameError::Invalid("unknown match_id"))?;
+        summary.status = MatchStatus::Active;
+        summary.context_id = Some(context_id.to_string());
+        self.matches
+            .insert(match_id.to_string(), summary)
+            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+        Ok(())
     }
 
     pub fn get_matches(&self) -> app::Result<Vec<MatchSummary>> {
@@ -216,15 +264,23 @@ impl LobbyState {
         Ok(entries.map(|(_, v)| v).collect())
     }
 
-    pub fn get_player_stats(&self, player: String) -> app::Result<Option<PlayerStats>> {
-        // Implemented in Task 4 — read from UnorderedMap.
-        let _ = player;
-        todo!("task 4: get_player_stats")
+    pub fn get_player_stats(&self, player: String) -> app::Result<Option<PlayerStatsView>> {
+        let stats = self
+            .player_stats
+            .get(&player)
+            .map_err(|e| AppError::msg(format!("player_stats.get: {e}")))?;
+        match stats {
+            Some(s) => Ok(Some(s.to_view().map_err(|e| AppError::msg(e.to_string()))?)),
+            None => Ok(None),
+        }
     }
 
     pub fn get_history(&self) -> app::Result<Vec<MatchRecord>> {
-        // Implemented in Task 4 — iterate Vector.
-        todo!("task 4: get_history")
+        let iter = self
+            .history
+            .iter()
+            .map_err(|e| AppError::msg(format!("history.iter: {e}")))?;
+        Ok(iter.collect())
     }
 
     pub fn on_match_finished(
@@ -233,17 +289,84 @@ impl LobbyState {
         winner: String,
         loser: String,
     ) -> app::Result<()> {
-        // Implemented in Task 4 — Counter increments + Vector::push + status flip.
-        let _ = (match_id, winner, loser);
-        todo!("task 4: on_match_finished")
+        let now = storage_env::time_now();
+        self.on_match_finished_inner(&match_id, &winner, &loser, now)
+            .map_err(|e| AppError::msg(e.to_string()))?;
+        app::emit!(Event::MatchListUpdated {});
+        app::emit!(Event::PlayerStatsUpdated {});
+        Ok(())
     }
+
+    pub(crate) fn on_match_finished_inner(
+        &mut self,
+        match_id: &str,
+        winner: &str,
+        loser: &str,
+        finished_ms: u64,
+    ) -> Result<(), GameError> {
+        // 1. Finalize the summary.
+        let mut summary = self
+            .matches
+            .get(&match_id.to_string())
+            .map_err(|_| GameError::Invalid("matches.get failed"))?
+            .ok_or(GameError::Invalid("unknown match_id"))?;
+        summary.status = MatchStatus::Finished;
+        summary.winner = Some(winner.to_string());
+        self.matches
+            .insert(match_id.to_string(), summary)
+            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+
+        // 2. Append history record.
+        self.history
+            .push(MatchRecord {
+                match_id: match_id.to_string(),
+                winner: winner.to_string(),
+                loser: loser.to_string(),
+                finished_ms,
+            })
+            .map_err(|_| GameError::Invalid("history.push failed"))?;
+
+        // 3. Counter-backed stat updates.
+        bump_stats(&mut self.player_stats, winner, true)?;
+        bump_stats(&mut self.player_stats, loser, false)?;
+        Ok(())
+    }
+}
+
+fn bump_stats(
+    stats_map: &mut UnorderedMap<String, PlayerStats>,
+    player_key: &str,
+    is_winner: bool,
+) -> Result<(), GameError> {
+    let mut stats = stats_map
+        .get(&player_key.to_string())
+        .map_err(|_| GameError::Invalid("stats.get failed"))?
+        .unwrap_or_else(|| PlayerStats::new(player_key));
+    stats
+        .games_played
+        .increment()
+        .map_err(|_| GameError::Invalid("games_played.increment failed"))?;
+    if is_winner {
+        stats
+            .wins
+            .increment()
+            .map_err(|_| GameError::Invalid("wins.increment failed"))?;
+    } else {
+        stats
+            .losses
+            .increment()
+            .map_err(|_| GameError::Invalid("losses.increment failed"))?;
+    }
+    stats_map
+        .insert(player_key.to_string(), stats)
+        .map_err(|_| GameError::Invalid("stats.insert failed"))?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use battleships_types::GameError;
-    use bs58;
 
     #[test]
     fn player_stats_counters_start_at_zero() {
@@ -294,5 +417,48 @@ mod tests {
         let _ = state.create_match_with_clock(&a, &b, ts).unwrap();
         let err = state.create_match_with_clock(&a, &b, ts).unwrap_err();
         assert!(matches!(err, GameError::MatchIdCollision));
+    }
+
+    #[test]
+    fn set_match_context_id_promotes_to_active() {
+        let mut state = LobbyState::init();
+        let a = bs58::encode([1u8; 32]).into_string();
+        let b = bs58::encode([2u8; 32]).into_string();
+        let id = state
+            .create_match_with_clock(&a, &b, 1_700_000_000_000)
+            .unwrap();
+        state.set_match_context_id_inner(&id, "ctx_abc").unwrap();
+        let summary = state.matches.get(&id).unwrap().unwrap();
+        assert!(matches!(summary.status, MatchStatus::Active));
+        assert_eq!(summary.context_id.as_deref(), Some("ctx_abc"));
+    }
+
+    #[test]
+    fn on_match_finished_records_winner_and_increments_counters() {
+        let mut state = LobbyState::init();
+        let winner = bs58::encode([1u8; 32]).into_string();
+        let loser = bs58::encode([2u8; 32]).into_string();
+        let id = state
+            .create_match_with_clock(&winner, &loser, 1_700_000_000_000)
+            .unwrap();
+        state
+            .on_match_finished_inner(&id, &winner, &loser, 1_700_000_000_999)
+            .unwrap();
+
+        let summary = state.matches.get(&id).unwrap().unwrap();
+        assert!(matches!(summary.status, MatchStatus::Finished));
+        assert_eq!(summary.winner.as_deref(), Some(winner.as_str()));
+
+        let winner_stats = state.player_stats.get(&winner).unwrap().unwrap();
+        assert_eq!(winner_stats.wins.value_unsigned().unwrap(), 1);
+        assert_eq!(winner_stats.games_played.value_unsigned().unwrap(), 1);
+        assert_eq!(winner_stats.losses.value_unsigned().unwrap(), 0);
+
+        let loser_stats = state.player_stats.get(&loser).unwrap().unwrap();
+        assert_eq!(loser_stats.losses.value_unsigned().unwrap(), 1);
+        assert_eq!(loser_stats.games_played.value_unsigned().unwrap(), 1);
+        assert_eq!(loser_stats.wins.value_unsigned().unwrap(), 0);
+
+        assert_eq!(state.history.len().unwrap(), 1);
     }
 }

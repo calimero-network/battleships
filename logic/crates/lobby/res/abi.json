@@ -195,6 +195,29 @@
           }
         }
       ]
+    },
+    "PlayerStatsView": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "wins",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "losses",
+          "type": {
+            "kind": "u64"
+          }
+        },
+        {
+          "name": "games_played",
+          "type": {
+            "kind": "u64"
+          }
+        }
+      ]
     }
   },
   "methods": [
@@ -210,6 +233,13 @@
       ],
       "returns": {
         "$ref": "PlayerStats"
+      }
+    },
+    {
+      "name": "to_view",
+      "params": [],
+      "returns": {
+        "$ref": "PlayerStatsView"
       }
     },
     {
@@ -274,7 +304,7 @@
         }
       ],
       "returns": {
-        "$ref": "PlayerStats"
+        "$ref": "PlayerStatsView"
       }
     },
     {
