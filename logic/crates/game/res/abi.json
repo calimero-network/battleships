@@ -44,6 +44,86 @@
         }
       ]
     },
+    "Event_AuditFailed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "Event_AuditPassed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "Event_BoardCommitted": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "commitment",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "Event_BoardRevealed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "Event_MatchEnded": {
       "kind": "record",
       "fields": [
@@ -125,6 +205,24 @@
           "name": "id",
           "type": {
             "kind": "string"
+          }
+        }
+      ]
+    },
+    "ExportedSeed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "board_bytes",
+          "type": {
+            "kind": "bytes"
+          }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "kind": "bytes",
+            "size": 16
           }
         }
       ]
@@ -485,19 +583,19 @@
       "name": "init",
       "params": [
         {
-          "name": "_player1",
+          "name": "player1",
           "type": {
             "kind": "string"
           }
         },
         {
-          "name": "_player2",
+          "name": "player2",
           "type": {
             "kind": "string"
           }
         },
         {
-          "name": "_lobby_context_id",
+          "name": "lobby_context_id",
           "type": {
             "kind": "string"
           },
@@ -569,6 +667,61 @@
       ],
       "returns": {
         "kind": "string"
+      }
+    },
+    {
+      "name": "reveal_board",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      }
+    },
+    {
+      "name": "export_board_seed",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "$ref": "ExportedSeed"
+      }
+    },
+    {
+      "name": "import_board_seed",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "board_bytes",
+          "type": {
+            "kind": "bytes"
+          }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "kind": "bytes",
+            "size": 16
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
       }
     },
     {
@@ -652,6 +805,30 @@
       "name": "ShipsPlaced",
       "payload": {
         "$ref": "Event_ShipsPlaced"
+      }
+    },
+    {
+      "name": "BoardCommitted",
+      "payload": {
+        "$ref": "Event_BoardCommitted"
+      }
+    },
+    {
+      "name": "BoardRevealed",
+      "payload": {
+        "$ref": "Event_BoardRevealed"
+      }
+    },
+    {
+      "name": "AuditPassed",
+      "payload": {
+        "$ref": "Event_AuditPassed"
+      }
+    },
+    {
+      "name": "AuditFailed",
+      "payload": {
+        "$ref": "Event_AuditFailed"
       }
     },
     {
