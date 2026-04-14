@@ -1,9 +1,19 @@
-// Post-process @calimero/abi-codegen output: codegen v1.0.1 sometimes emits
-// helper functions (convertCalimeroBytesForWasm / convertWasmResultToCalimeroBytes)
-// in clients whose methods don't actually call them. Lint then fails on the
-// unused locals. Re-add an `eslint-disable` directive only for files that
-// contain at least one of these helpers, so we don't emit a stray
-// "unused eslint-disable" error on cleaner clients.
+// Post-process @calimero/abi-codegen output. Two issues handled:
+//
+// 1. Unit-only enum variants are emitted as a tagged-object union
+//    (`type FooPayload = { name: 'X' } | ...; const Foo = { X: () => ({name:'X'}), ... }`)
+//    even though the Rust serde-default wire format is a plain JSON string.
+//    Earlier codegen versions produced string unions, which is what consumers
+//    (e.g. `m.status === 'Active'`) actually depend on. We rewrite each
+//    detected pair to `export type Foo = 'X' | 'Y' | ...;` and drop the
+//    factory const, restoring the previous behaviour and matching the runtime.
+//
+// 2. Unused helper functions (`convertCalimeroBytesForWasm`,
+//    `convertWasmResultToCalimeroBytes`) sometimes appear in clients whose
+//    methods don't call them; the codegen no longer prepends an
+//    `eslint-disable` directive, so `pnpm lint --max-warnings 0` fails. We
+//    re-add the directive only for files where at least one helper is
+//    genuinely module-level-unused.
 
 import fs from 'node:fs';
 
@@ -17,8 +27,34 @@ const UNUSED_HELPERS = [
   'convertWasmResultToCalimeroBytes',
 ];
 
+/**
+ * Rewrite every `export type FooPayload = | { name: 'X' } …` block followed
+ * by `export const Foo = { … } as const;` into a single string-union type
+ * `export type Foo = 'X' | 'Y' | …;` — but only when every variant is unit
+ * (no payload fields beyond `name`). Variants with fields are left alone so
+ * data-bearing enums keep their tagged-object representation.
+ */
+function rewriteUnitVariants(text) {
+  const payloadRe =
+    /export type (\w+)Payload =\s*((?:\s*\|\s*\{[^}]*\})+)\s*\n\s*export const \1 = \{[\s\S]*?\} as const;\s*/g;
+  return text.replace(payloadRe, (match, baseName, variantsBlock) => {
+    const variantRe = /\{\s*name:\s*'([^']+)'\s*\}/g;
+    const allUnit = [...variantsBlock.matchAll(/\{[^}]*\}/g)].every((m) =>
+      /^\{\s*name:\s*'[^']+'\s*\}$/.test(m[0].trim()),
+    );
+    if (!allUnit) return match;
+    const names = [...variantsBlock.matchAll(variantRe)].map((m) => `'${m[1]}'`);
+    return `export type ${baseName} =\n  | ${names.join('\n  | ')};\n\n`;
+  });
+}
+
 for (const file of FILES) {
-  const text = fs.readFileSync(file, 'utf8');
+  let text = fs.readFileSync(file, 'utf8');
+  const rewritten = rewriteUnitVariants(text);
+  if (rewritten !== text) {
+    fs.writeFileSync(file, rewritten);
+    text = rewritten;
+  }
   // Heuristic: a helper is unused at the module level when it's defined but
   // never called from outside its own body. We detect this by stripping the
   // function definition (and its body) and checking whether any call site

@@ -8,20 +8,12 @@ import {
 
 export type Board = CalimeroBytes;
 
-export type CellPayload =
-  | { name: 'Empty' }
-  | { name: 'Ship' }
-  | { name: 'Hit' }
-  | { name: 'Miss' }
-  | { name: 'Pending' }
-
-export const Cell = {
-  Empty: (): CellPayload => ({ name: 'Empty' }),
-  Ship: (): CellPayload => ({ name: 'Ship' }),
-  Hit: (): CellPayload => ({ name: 'Hit' }),
-  Miss: (): CellPayload => ({ name: 'Miss' }),
-  Pending: (): CellPayload => ({ name: 'Pending' }),
-} as const;
+export type Cell =
+  | 'Empty'
+  | 'Ship'
+  | 'Hit'
+  | 'Miss'
+  | 'Pending';
 
 export interface Coordinate {
   x: number;

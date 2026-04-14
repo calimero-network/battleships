@@ -29,16 +29,10 @@ export interface MatchRecord {
   finished_ms: number;
 }
 
-export type MatchStatusPayload =
-  | { name: 'Pending' }
-  | { name: 'Active' }
-  | { name: 'Finished' }
-
-export const MatchStatus = {
-  Pending: (): MatchStatusPayload => ({ name: 'Pending' }),
-  Active: (): MatchStatusPayload => ({ name: 'Active' }),
-  Finished: (): MatchStatusPayload => ({ name: 'Finished' }),
-} as const;
+export type MatchStatus =
+  | 'Pending'
+  | 'Active'
+  | 'Finished';
 
 export interface MatchSummary {
   match_id: string;
