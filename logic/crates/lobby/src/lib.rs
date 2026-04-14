@@ -91,11 +91,11 @@ impl PlayerStats {
         let wins = self
             .wins
             .value_unsigned()
-            .map_err(|_| GameError::Invalid("wins read"))?;
+            .map_err(|e| GameError::Invalid(format!("wins read: {e}")))?;
         let losses = self
             .losses
             .value_unsigned()
-            .map_err(|_| GameError::Invalid("losses read"))?;
+            .map_err(|e| GameError::Invalid(format!("losses read: {e}")))?;
         Ok(PlayerStatsView {
             wins,
             losses,
@@ -143,7 +143,7 @@ impl Mergeable for MatchRecord {
 fn from_executor_id() -> Result<PublicKey, GameError> {
     let v = calimero_sdk::env::executor_id();
     if v.len() != 32 {
-        return Err(GameError::Invalid("executor id length"));
+        return Err(GameError::Invalid("executor id length".into()));
     }
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&v);
@@ -212,17 +212,19 @@ impl LobbyState {
     ) -> Result<String, GameError> {
         // Reject self-matches: the turn protocol assumes two distinct players.
         if caller_b58 == player2_b58 {
-            return Err(GameError::Invalid("cannot create match against self"));
+            return Err(GameError::Invalid(
+                "cannot create match against self".into(),
+            ));
         }
         // Reject malformed player2 keys early so the game context can validate
         // its caller against a real key.
         PublicKey::from_base58(player2_b58)
-            .map_err(|_| GameError::Invalid("player2 is not a valid base58 key"))?;
+            .map_err(|e| GameError::Invalid(format!("player2 is not a valid base58 key: {e}")))?;
         let match_id = format!("{caller_b58}-{now_ms}-{nonce_hex}");
         let collides = self
             .matches
             .contains(&match_id)
-            .map_err(|_| GameError::Invalid("matches.contains failed"))?;
+            .map_err(|e| GameError::Invalid(format!("matches.contains failed: {e}")))?;
         if collides {
             return Err(GameError::MatchIdCollision);
         }
@@ -237,7 +239,7 @@ impl LobbyState {
         };
         self.matches
             .insert(match_id.clone(), summary)
-            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+            .map_err(|e| GameError::Invalid(format!("matches.insert failed: {e}")))?;
         Ok(match_id)
     }
 
@@ -260,19 +262,19 @@ impl LobbyState {
         let mut summary = self
             .matches
             .get(&match_id.to_string())
-            .map_err(|_| GameError::Invalid("matches.get failed"))?
-            .ok_or(GameError::Invalid("unknown match_id"))?;
+            .map_err(|e| GameError::Invalid(format!("matches.get failed: {e}")))?
+            .ok_or(GameError::Invalid("unknown match_id".into()))?;
         // Only allow the Pending -> Active transition. Re-linking an Active
         // match silently is redundant; reactivating a Finished match would
         // corrupt history.
         if summary.status != MatchStatus::Pending {
-            return Err(GameError::Invalid("match not in Pending state"));
+            return Err(GameError::Invalid("match not in Pending state".into()));
         }
         summary.status = MatchStatus::Active;
         summary.context_id = Some(context_id.to_string());
         self.matches
             .insert(match_id.to_string(), summary)
-            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+            .map_err(|e| GameError::Invalid(format!("matches.insert failed: {e}")))?;
         Ok(())
     }
 
@@ -330,13 +332,13 @@ impl LobbyState {
         let mut summary = self
             .matches
             .get(&match_id.to_string())
-            .map_err(|_| GameError::Invalid("matches.get failed"))?
-            .ok_or(GameError::Invalid("unknown match_id"))?;
+            .map_err(|e| GameError::Invalid(format!("matches.get failed: {e}")))?
+            .ok_or(GameError::Invalid("unknown match_id".into()))?;
         summary.status = MatchStatus::Finished;
         summary.winner = Some(winner.to_string());
         self.matches
             .insert(match_id.to_string(), summary)
-            .map_err(|_| GameError::Invalid("matches.insert failed"))?;
+            .map_err(|e| GameError::Invalid(format!("matches.insert failed: {e}")))?;
 
         self.history
             .push(MatchRecord {
@@ -345,7 +347,7 @@ impl LobbyState {
                 loser: loser.to_string(),
                 finished_ms,
             })
-            .map_err(|_| GameError::Invalid("history.push failed"))?;
+            .map_err(|e| GameError::Invalid(format!("history.push failed: {e}")))?;
 
         bump_stats(&mut self.player_stats, winner, true)?;
         bump_stats(&mut self.player_stats, loser, false)?;
@@ -360,22 +362,22 @@ fn bump_stats(
 ) -> Result<(), GameError> {
     let mut stats = stats_map
         .get(&player_key.to_string())
-        .map_err(|_| GameError::Invalid("stats.get failed"))?
+        .map_err(|e| GameError::Invalid(format!("stats.get failed: {e}")))?
         .unwrap_or_else(|| PlayerStats::new(player_key));
     if is_winner {
         stats
             .wins
             .increment()
-            .map_err(|_| GameError::Invalid("wins.increment failed"))?;
+            .map_err(|e| GameError::Invalid(format!("wins.increment failed: {e}")))?;
     } else {
         stats
             .losses
             .increment()
-            .map_err(|_| GameError::Invalid("losses.increment failed"))?;
+            .map_err(|e| GameError::Invalid(format!("losses.increment failed: {e}")))?;
     }
     stats_map
         .insert(player_key.to_string(), stats)
-        .map_err(|_| GameError::Invalid("stats.insert failed"))?;
+        .map_err(|e| GameError::Invalid(format!("stats.insert failed: {e}")))?;
     Ok(())
 }
 

@@ -68,7 +68,7 @@ pub struct ExportedSeed {
 fn from_executor_id() -> Result<PublicKey, GameError> {
     let v = calimero_sdk::env::executor_id();
     if v.len() != 32 {
-        return Err(GameError::Invalid("executor id length"));
+        return Err(GameError::Invalid("executor id length".into()));
     }
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&v);
@@ -151,7 +151,7 @@ impl GameState {
             .match_id
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no active match")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no active match".into())))?;
         if match_id != active_id {
             app::bail!(GameError::NotFound(match_id.to_string()));
         }
@@ -161,7 +161,7 @@ impl GameState {
 
         let caller = from_executor_id()?;
         if !self.is_player(&caller) {
-            app::bail!(GameError::Forbidden("not a player"));
+            app::bail!(GameError::Forbidden("not a player".into()));
         }
 
         // Write-once: reject a second commitment from the same player.
@@ -222,31 +222,33 @@ impl GameState {
             .match_id
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no active match")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no active match".into())))?;
         if match_id != active_id {
             app::bail!(GameError::NotFound(match_id.to_string()));
         }
         if x >= BOARD_SIZE || y >= BOARD_SIZE {
-            app::bail!(GameError::Invalid("out of bounds"));
+            app::bail!(GameError::Invalid("out of bounds".into()));
         }
         if self.winner.get().is_some() {
             app::bail!(GameError::Finished);
         }
         if !(*self.placed_p1.get()) || !(*self.placed_p2.get()) {
-            app::bail!(GameError::Invalid("both players must place ships first"));
+            app::bail!(GameError::Invalid(
+                "both players must place ships first".into()
+            ));
         }
         if self.pending.get().is_some() {
-            app::bail!(GameError::Invalid("a shot is already pending"));
+            app::bail!(GameError::Invalid("a shot is already pending".into()));
         }
 
         let caller = from_executor_id()?;
         let p1 = self.player1_or_panic()?;
         let p2 = self.player2_or_panic()?;
         if caller != p1 && caller != p2 {
-            app::bail!(GameError::Forbidden("not a player"));
+            app::bail!(GameError::Forbidden("not a player".into()));
         }
         if self.turn.get().as_ref() != Some(&caller) {
-            app::bail!(GameError::Forbidden("not your turn"));
+            app::bail!(GameError::Forbidden("not your turn".into()));
         }
 
         let target = if caller == p1 { p2.clone() } else { p1.clone() };
@@ -278,7 +280,7 @@ impl GameState {
             .match_id
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no active match")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no active match".into())))?;
         if match_id != active_id {
             app::bail!(GameError::NotFound(match_id.to_string()));
         }
@@ -291,9 +293,9 @@ impl GameState {
             .pending
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no pending shot")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no pending shot".into())))?;
         if pending.target != caller {
-            app::bail!(GameError::Forbidden("not the target"));
+            app::bail!(GameError::Forbidden("not the target".into()));
         }
 
         // Resolve against the caller's private board.
@@ -303,7 +305,7 @@ impl GameState {
         let mut pb = priv_mut
             .boards
             .get(&key)?
-            .ok_or_else(|| AppError::from(GameError::Invalid("target board unavailable")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("target board unavailable".into())))?;
         let cur = pb.get_board().get(BOARD_SIZE, pending.x, pending.y);
         let is_hit = cur == Cell::Ship;
         if is_hit {
@@ -344,7 +346,9 @@ impl GameState {
                 .commitments
                 .get_for_user(&sdk_pk(&caller))
                 .map_err(|e| AppError::msg(format!("commitments.get_for_user: {e}")))?
-                .ok_or_else(|| AppError::from(GameError::Invalid("no commitment for caller")))?;
+                .ok_or_else(|| {
+                    AppError::from(GameError::Invalid("no commitment for caller".into()))
+                })?;
             let commitment_hash = *commitment.get();
             let board_bytes = calimero_sdk::borsh::to_vec(&pristine_bytes)
                 .map_err(|e| AppError::msg(format!("serialize board: {e}")))?;
@@ -432,7 +436,7 @@ impl GameState {
             .match_id
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no active match")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no active match".into())))?;
         if match_id != active_id {
             app::bail!(GameError::NotFound(match_id.to_string()));
         }
@@ -441,7 +445,7 @@ impl GameState {
             .commitments
             .get_for_user(&sdk_pk(&caller))
             .map_err(|e| AppError::msg(format!("commitments.get_for_user: {e}")))?
-            .ok_or_else(|| AppError::from(GameError::Invalid("no commitment for caller")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no commitment for caller".into())))?;
         let commitment_hash = *commitment.get();
         let priv_boards = PrivateBoards::private_load_or_default()?;
         let pb = priv_boards
@@ -514,7 +518,7 @@ impl GameState {
             .commitments
             .get_for_user(&sdk_pk(&caller))
             .map_err(|e| AppError::msg(format!("commitments.get_for_user: {e}")))?
-            .ok_or_else(|| AppError::from(GameError::Invalid("no commitment for caller")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no commitment for caller".into())))?;
         let expected_hash = *expected.get();
         if !audit::verify_commitment(&board_bytes, &salt, &expected_hash) {
             app::bail!(GameError::CommitmentMismatch);
@@ -536,7 +540,7 @@ impl GameState {
             .match_id
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no active match")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no active match".into())))?;
         if match_id != active_id {
             app::bail!(GameError::NotFound(match_id.to_string()));
         }
@@ -566,7 +570,7 @@ impl GameState {
             .match_id
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("no active match")))?;
+            .ok_or_else(|| AppError::from(GameError::Invalid("no active match".into())))?;
         if match_id != active_id {
             app::bail!(GameError::NotFound(match_id.to_string()));
         }
@@ -574,7 +578,7 @@ impl GameState {
         let p1 = self.player1_or_panic()?;
         let p2 = self.player2_or_panic()?;
         if caller != p1 && caller != p2 {
-            app::bail!(GameError::Forbidden("not a player"));
+            app::bail!(GameError::Forbidden("not a player".into()));
         }
         let map = if caller == p1 {
             &self.shots_p1
@@ -625,14 +629,14 @@ impl GameState {
         self.player1
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("player1 unset")))
+            .ok_or_else(|| AppError::from(GameError::Invalid("player1 unset".into())))
     }
 
     fn player2_or_panic(&self) -> app::Result<PublicKey> {
         self.player2
             .get()
             .clone()
-            .ok_or_else(|| AppError::from(GameError::Invalid("player2 unset")))
+            .ok_or_else(|| AppError::from(GameError::Invalid("player2 unset".into())))
     }
 }
 

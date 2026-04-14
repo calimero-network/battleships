@@ -7,10 +7,14 @@ use thiserror::Error;
 pub enum GameError {
     #[error("not found: {0}")]
     NotFound(String),
+    // String (not &'static str) so call sites can format the underlying
+    // error into the message instead of discarding it. The vast majority
+    // of call sites used to be `.map_err(|_| Invalid("foo failed"))`,
+    // which threw away every storage / parse / IO error in the codebase.
     #[error("invalid input: {0}")]
-    Invalid(&'static str),
+    Invalid(String),
     #[error("forbidden: {0}")]
-    Forbidden(&'static str),
+    Forbidden(String),
     #[error("already finished")]
     Finished,
     #[error("match id already exists")]
@@ -35,9 +39,9 @@ impl PublicKey {
     pub fn from_base58(encoded: &str) -> Result<PublicKey, GameError> {
         let decoded = bs58::decode(encoded)
             .into_vec()
-            .map_err(|_| GameError::Invalid("bad base58 key"))?;
+            .map_err(|e| GameError::Invalid(format!("bad base58 key: {e}")))?;
         if decoded.len() != 32 {
-            return Err(GameError::Invalid("key length"));
+            return Err(GameError::Invalid("key length".into()));
         }
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&decoded);

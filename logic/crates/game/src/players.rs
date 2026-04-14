@@ -151,7 +151,7 @@ impl PlayerBoard {
 
     pub fn place_ships(&mut self, ships: Vec<String>) -> Result<(), GameError> {
         if self.placed {
-            return Err(GameError::Invalid("already placed"));
+            return Err(GameError::Invalid("already placed".into()));
         }
 
         let mut ship_counts = [0; 4]; // [2,3,4,5] lengths
@@ -166,12 +166,12 @@ impl PlayerBoard {
 
             let ship_len = coords.len();
             if !(2..=5).contains(&ship_len) {
-                return Err(GameError::Invalid("ship length must be 2-5"));
+                return Err(GameError::Invalid("ship length must be 2-5".into()));
             }
 
             let idx = ship_len - 2;
             if idx >= 4 {
-                return Err(GameError::Invalid("invalid ship length"));
+                return Err(GameError::Invalid("invalid ship length".into()));
             }
             ship_counts[idx] += 1;
             total_ships += 1;
@@ -189,7 +189,7 @@ impl PlayerBoard {
         }
 
         if total_ships == 0 {
-            return Err(GameError::Invalid("no ships"));
+            return Err(GameError::Invalid("no ships".into()));
         }
 
         // Use validation strategy pattern for fleet composition
