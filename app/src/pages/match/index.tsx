@@ -817,7 +817,7 @@ export default function MatchPage() {
                       <button
                         className="btn-fire"
                         style={{ marginTop: '0.75rem' }}
-                        onClick={() => { setView('lobby'); navigate('/lobby', { replace: true }); }}
+                        onClick={resetToLobby}
                       >
                         Back to Lobby
                       </button>
