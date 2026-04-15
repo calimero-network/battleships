@@ -95,6 +95,15 @@ export default function MatchPage() {
   const effectiveMatchId = resolveEffectiveMatchId(matchId, runtimeMatchId);
   const [matchApiReady, setMatchApiReady] = useState(false);
 
+  // Finish-state derived from the lobby match list. Needed because the on-chain
+  // `MatchEnded` / `Winner` event can be dropped when its state-delta arrives
+  // via periodic sync instead of gossipsub broadcast (see calimero core #2139),
+  // so we fall back to reading the lobby's authoritative `status` / `winner`.
+  const currentMatch = myMatches.find((m) => m.match_id === effectiveMatchId);
+  const matchFinished = currentMatch?.status === 'Finished';
+  const matchWinner = currentMatch?.winner ?? null;
+  const isWinner = matchFinished && matchWinner !== null && matchWinner === currentUser;
+
   // ---------------------------------------------------------------------------
   // Utilities
   // ---------------------------------------------------------------------------
@@ -195,6 +204,19 @@ export default function MatchPage() {
       setMyMatches(summaries);
     } catch { /* non-critical */ }
   }, [lobbyApi]);
+
+  // Safety-net poll for match status. The `MatchEnded` / `Winner` events are
+  // emitted from the game context and delivered over SSE, but when the winning
+  // delta arrives on the losing node via sync catch-up instead of a gossipsub
+  // broadcast the event handler never fires (calimero core #2139). Polling the
+  // lobby's authoritative match list every 5s while a game is active lets the
+  // UI transition to the finish state within the poll interval even when the
+  // event is dropped.
+  useEffect(() => {
+    if (view !== 'game' || !lobbyApi) return;
+    const interval = setInterval(() => { refreshMatchList(); }, 5000);
+    return () => clearInterval(interval);
+  }, [view, lobbyApi, refreshMatchList]);
 
   const handleGameEvent = useCallback(
     (event: AllGameEvents) => {
@@ -362,7 +384,7 @@ export default function MatchPage() {
       await mero.admin.addGroupMembers(matchSubgroupId, { members: [{ identity: player2, role: 'Member' }] });
 
       const executorKey = lobby.executorPublicKey ?? contextIdentity;
-      const initParams = JSON.stringify({ player1: executorKey, player2, lobby_context_id: currentContext.contextId });
+      const initParams = JSON.stringify({ player1: executorKey, player2, lobby_context_id: currentContext.contextId, match_id: id });
       const initBytes = Array.from(new TextEncoder().encode(initParams));
 
       const { contextId: newContextId } = await mero.admin.createContext({
@@ -506,12 +528,13 @@ export default function MatchPage() {
   // ---------------------------------------------------------------------------
 
   const handleShotGridClick = useCallback((clickX: number, clickY: number) => {
-    if (!isMyTurn) return;
+    if (!isMyTurn || matchFinished) return;
     setSelectedShotX(clickX);
     setSelectedShotY(clickY);
-  }, [isMyTurn]);
+  }, [isMyTurn, matchFinished]);
 
   const proposeShot = useCallback(async (shotX?: number, shotY?: number) => {
+    if (matchFinished) return;
     if (!matchApi || !matchApiReady) { show({ title: 'Match context is still syncing', variant: 'warning' }); return; }
     if (!effectiveMatchId) { show({ title: 'Set match id first', variant: 'error' }); return; }
     if (loadingRef.current) return;
@@ -529,11 +552,21 @@ export default function MatchPage() {
       setPendingShot(null);
     } catch (e) {
       console.error('proposeShot', e);
-      show({ title: e instanceof Error ? e.message : 'Failed to fire shot', variant: 'error' });
+      // Match-over errors arrive as a JSON payload from the game WASM, e.g.
+      // `{"kind":"Finished"}`. Translate into a refresh instead of the raw
+      // error toast so the UI transitions cleanly even if the winner event
+      // was lost to core #2139.
+      const message = e instanceof Error ? e.message : '';
+      if (message.includes('Finished') || message.includes('"kind":"Finished"')) {
+        refreshMatchList();
+        show({ title: 'Match already finished', variant: 'info' });
+      } else {
+        show({ title: message || 'Failed to fire shot', variant: 'error' });
+      }
     } finally {
       loadingRef.current = false;
     }
-  }, [matchApi, matchApiReady, effectiveMatchId, show, loadBoards, loadTurnInfo, ensureMatchContextReady]);
+  }, [matchApi, matchApiReady, effectiveMatchId, matchFinished, refreshMatchList, show, loadBoards, loadTurnInfo, ensureMatchContextReady]);
 
   // ---------------------------------------------------------------------------
   // Lobby actions
@@ -747,20 +780,51 @@ export default function MatchPage() {
                 <div className="naval-card-header">
                   <div className="naval-card-title">
                     Enemy Waters
-                    {isMyTurn && <span className="badge badge-live">Your Turn</span>}
+                    {matchFinished ? (
+                      <span className="badge badge-live">{isWinner ? 'Victory' : 'Defeat'}</span>
+                    ) : (
+                      isMyTurn && <span className="badge badge-live">Your Turn</span>
+                    )}
                   </div>
                 </div>
                 <div className="naval-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <ShotGrid
                     size={size}
                     shots={shotsBoard}
-                    isMyTurn={isMyTurn}
+                    isMyTurn={isMyTurn && !matchFinished}
                     selectedX={selectedShotX}
                     selectedY={selectedShotY}
                     onCellClick={handleShotGridClick}
                   />
 
-                  {selectedShotX !== null && selectedShotY !== null && (
+                  {matchFinished && (
+                    <div
+                      style={{
+                        padding: '0.75rem 1rem',
+                        border: '1px solid var(--select-cyan)',
+                        borderRadius: 4,
+                        background: 'rgba(0, 255, 255, 0.05)',
+                      }}
+                    >
+                      <div className="mono" style={{ fontWeight: 700, marginBottom: '0.25rem' }}>
+                        {isWinner ? '🏆 You won this match.' : 'Match over.'}
+                      </div>
+                      {matchWinner && (
+                        <div className="mono-sm" style={{ opacity: 0.75, wordBreak: 'break-all' }}>
+                          Winner: {matchWinner}
+                        </div>
+                      )}
+                      <button
+                        className="btn-fire"
+                        style={{ marginTop: '0.75rem' }}
+                        onClick={() => { setView('lobby'); navigate('/lobby', { replace: true }); }}
+                      >
+                        Back to Lobby
+                      </button>
+                    </div>
+                  )}
+
+                  {!matchFinished && selectedShotX !== null && selectedShotY !== null && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       <div className="info-pair">
                         <span className="info-label">Target</span>
@@ -778,7 +842,7 @@ export default function MatchPage() {
                     </div>
                   )}
 
-                  {!isMyTurn && placed && (
+                  {!matchFinished && !isMyTurn && placed && (
                     <span className="mono-sm">Waiting for opponent...</span>
                   )}
                 </div>
