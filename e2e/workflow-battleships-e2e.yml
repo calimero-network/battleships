@@ -575,4 +575,568 @@ steps:
       context_id: '{{match_ctx_id}}'
     expected_failure: true
 
+  # ============================================================
+  # Phase G: Complete the Game — 31 more shots in varied order
+  # ============================================================
+  # Rationale: the original Phase D asserted ONE round (1 shot each).
+  # This phase plays the match to completion to cover:
+  #   (a) full 17-hit win condition and `winner` LwwRegister transition,
+  #   (b) Event::Winner / Event::MatchEnded emission and `on_match_finished`
+  #       xcall back to the lobby,
+  #   (c) MatchSummary.status: Active → Finished convergence across nodes,
+  #   (d) post-finish behaviour (further propose_shot must be rejected with
+  #       GameError::Finished).
+  #
+  # Shot choreography:
+  #   - P1 needs 17 hits on P2 ship cells to win. P1 already has 1 hit at
+  #     (8,0) from Phase D. Remaining 16 P2 ship cells are fired at in a
+  #     deliberately mixed order (not a straight sweep) — alternating
+  #     between ships, revisiting different rows, to exercise the shot-map
+  #     LwwRegister merge under interleaved writes.
+  #   - P2 takes 15 shots between P1's remaining 16 (strict turn alternation).
+  #     P2's mix is ~10 hits + 5 misses on varied cells; P1 still has ≥ 1
+  #     unhit cell when the match ends, so P1 wins cleanly.
+  #   - `wait_for_sync` between every turn is load-bearing: each shot
+  #     flips the turn LwwRegister, and the next node's propose_shot
+  #     will reject with "not your turn" if it reads stale state.
+
+  - name: Turn 3 — P1 Shot (9,0) [hit, sinks P2 destroyer]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 9, y: 0 }
+
+  - name: Sync After Turn 3
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 4 — P2 Shot (1,0) [hit, sinks P1 destroyer]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 1, y: 0 }
+
+  - name: Sync After Turn 4
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 5 — P1 Shot (5,8) [hit on carrier, jumps rows]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 5, y: 8 }
+
+  - name: Sync After Turn 5
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 6 — P2 Shot (5,5) [miss]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 5, y: 5 }
+
+  - name: Sync After Turn 6
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 7 — P1 Shot (7,2) [hit on P2 cruiser]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 7, y: 2 }
+
+  - name: Sync After Turn 7
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 8 — P2 Shot (0,2) [hit on P1 cruiser]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 0, y: 2 }
+
+  - name: Sync After Turn 8
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 9 — P1 Shot (6,8) [hit, continuing carrier]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 6, y: 8 }
+
+  - name: Sync After Turn 9
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 10 — P2 Shot (3,3) [miss]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 3, y: 3 }
+
+  - name: Sync After Turn 10
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 11 — P1 Shot (7,4) [hit on P2 submarine]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 7, y: 4 }
+
+  - name: Sync After Turn 11
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 12 — P2 Shot (1,2) [hit, continuing P1 cruiser]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 1, y: 2 }
+
+  - name: Sync After Turn 12
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 13 — P1 Shot (8,2) [hit, continuing P2 cruiser]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 8, y: 2 }
+
+  - name: Sync After Turn 13
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 14 — P2 Shot (2,2) [hit, sinks P1 cruiser]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 2, y: 2 }
+
+  - name: Sync After Turn 14
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 15 — P1 Shot (9,2) [hit, sinks P2 cruiser]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 9, y: 2 }
+
+  - name: Sync After Turn 15
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 16 — P2 Shot (5,3) [miss]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 5, y: 3 }
+
+  - name: Sync After Turn 16
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 17 — P1 Shot (6,6) [hit on P2 battleship]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 6, y: 6 }
+
+  - name: Sync After Turn 17
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 18 — P2 Shot (0,4) [hit on P1 submarine]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 0, y: 4 }
+
+  - name: Sync After Turn 18
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 19 — P1 Shot (7,8) [hit, back to P2 carrier]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 7, y: 8 }
+
+  - name: Sync After Turn 19
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 20 — P2 Shot (1,4) [hit, continuing P1 submarine]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 1, y: 4 }
+
+  - name: Sync After Turn 20
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 21 — P1 Shot (8,4) [hit, continuing P2 submarine]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 8, y: 4 }
+
+  - name: Sync After Turn 21
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 22 — P2 Shot (7,7) [miss]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 7, y: 7 }
+
+  - name: Sync After Turn 22
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 23 — P1 Shot (7,6) [hit, continuing P2 battleship]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 7, y: 6 }
+
+  - name: Sync After Turn 23
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 24 — P2 Shot (0,6) [hit on P1 battleship]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 0, y: 6 }
+
+  - name: Sync After Turn 24
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 25 — P1 Shot (8,6) [hit, continuing P2 battleship]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 8, y: 6 }
+
+  - name: Sync After Turn 25
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 26 — P2 Shot (1,6) [hit, continuing P1 battleship]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 1, y: 6 }
+
+  - name: Sync After Turn 26
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 27 — P1 Shot (9,4) [hit, sinks P2 submarine]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 9, y: 4 }
+
+  - name: Sync After Turn 27
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 28 — P2 Shot (9,9) [miss]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 9, y: 9 }
+
+  - name: Sync After Turn 28
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 29 — P1 Shot (8,8) [hit, continuing P2 carrier]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 8, y: 8 }
+
+  - name: Sync After Turn 29
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 30 — P2 Shot (0,8) [hit on P1 carrier]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 0, y: 8 }
+
+  - name: Sync After Turn 30
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 31 — P1 Shot (9,6) [hit, sinks P2 battleship]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 9, y: 6 }
+
+  - name: Sync After Turn 31
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  - name: Turn 32 — P2 Shot (1,8) [hit, continuing P1 carrier]
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 1, y: 8 }
+
+  - name: Sync After Turn 32
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # Turn 33: P1's 17th hit. This sinks P2's carrier's last cell,
+  # drives `ships_remaining` to 0 on node-2's private board, sets
+  # winner=P1, emits Event::Winner + Event::MatchEnded, and xcalls
+  # `on_match_finished` back to the lobby context.
+  - name: Turn 33 — P1 Shot (9,8) [WINNING HIT, sinks P2 carrier]
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 9, y: 8 }
+
+  - name: Sync After Match-End Shot
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{match_ctx_id}}'
+    timeout: 30
+
+  # Give the cross-context xcall (match -> lobby) a beat to apply.
+  - name: Wait for on_match_finished xcall Propagation
+    type: wait
+    seconds: 5
+    message: Waiting for match->lobby xcall to land on both nodes
+
+  - name: Sync Lobby After Match End
+    type: wait_for_sync
+    nodes: [calimero-node-1, calimero-node-2]
+    context_id: '{{lobby_ctx_id}}'
+    timeout: 30
+
+  # ============================================================
+  # Phase H: Post-Match Assertions
+  # ============================================================
+
+  # A propose_shot on a finished match must be rejected with
+  # GameError::Finished — the same guard the frontend catches on
+  # `{"kind":"Finished"}`. Run it from BOTH nodes to cover both
+  # the ex-winner and ex-loser paths.
+  - name: Reject Post-Match Shot from P1
+    type: call
+    node: calimero-node-1
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p1_key}}'
+    args: { match_id: '{{game_match_id}}', x: 0, y: 0 }
+    expected_failure: true
+
+  - name: Reject Post-Match Shot from P2
+    type: call
+    node: calimero-node-2
+    context_id: '{{match_ctx_id}}'
+    method: propose_shot
+    executor_public_key: '{{match_p2_key}}'
+    args: { match_id: '{{game_match_id}}', x: 5, y: 5 }
+    expected_failure: true
+
+  # The lobby should now show the match as Finished with P1 as the
+  # winner. Read from BOTH nodes to confirm the xcall + summary merge
+  # converged across the cluster.
+  - name: Read Finished Match Summary on Node 1
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: get_matches
+    executor_public_key: '{{p1_key}}'
+    outputs:
+      final_matches_n1: result.output
+
+  - name: Assert Final Match List on Node 1
+    type: assert
+    statements:
+      - 'is_set({{final_matches_n1}})'
+
+  - name: Read Finished Match Summary on Node 2
+    type: call
+    node: calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    method: get_matches
+    executor_public_key: '{{p2_key}}'
+    outputs:
+      final_matches_n2: result.output
+
+  - name: Assert Final Match List on Node 2
+    type: assert
+    statements:
+      - 'is_set({{final_matches_n2}})'
+
+  # Per-player stats should reflect one additional win/loss after
+  # on_match_finished applied the MatchRecord and bumped the counters.
+  - name: Read Player 1 Stats (should record the win)
+    type: call
+    node: calimero-node-1
+    context_id: '{{lobby_ctx_id}}'
+    method: get_player_stats
+    executor_public_key: '{{p1_key}}'
+    args: { player: '{{p1_key}}' }
+    outputs:
+      p1_stats: result.output
+
+  - name: Assert P1 Stats Set
+    type: assert
+    statements:
+      - 'is_set({{p1_stats}})'
+
+  - name: Read Player 2 Stats (should record the loss)
+    type: call
+    node: calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    method: get_player_stats
+    executor_public_key: '{{p2_key}}'
+    args: { player: '{{p2_key}}' }
+    outputs:
+      p2_stats: result.output
+
+  - name: Assert P2 Stats Set
+    type: assert
+    statements:
+      - 'is_set({{p2_stats}})'
+
 stop_all_nodes: false
