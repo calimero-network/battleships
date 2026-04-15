@@ -118,3 +118,5 @@ logic/res/bundle-temp/
 data/
 e2e/data/
 logic/data/
+
+.worktrees/

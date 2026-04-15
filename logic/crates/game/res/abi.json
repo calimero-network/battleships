@@ -44,6 +44,86 @@
         }
       ]
     },
+    "Event_AuditFailed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "Event_AuditPassed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "Event_BoardCommitted": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "commitment",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "Event_BoardRevealed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "player",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "Event_MatchEnded": {
       "kind": "record",
       "fields": [
@@ -129,6 +209,24 @@
         }
       ]
     },
+    "ExportedSeed": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "board_bytes",
+          "type": {
+            "kind": "bytes"
+          }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "kind": "bytes",
+            "size": 16
+          }
+        }
+      ]
+    },
     "Fleet": {
       "kind": "record",
       "fields": [
@@ -149,109 +247,158 @@
         {
           "name": "lobby_context_id",
           "type": {
-            "kind": "string"
-          },
-          "nullable": true
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "string"
+            }
+          }
         },
         {
-          "name": "active_match",
+          "name": "match_id",
           "type": {
-            "$ref": "Match"
-          },
-          "nullable": true
-        }
-      ]
-    },
-    "Match": {
-      "kind": "record",
-      "fields": [
-        {
-          "name": "id",
-          "type": {
-            "kind": "string"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "string"
+            }
           }
         },
         {
           "name": "player1",
           "type": {
-            "kind": "bytes",
-            "size": 32
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "bytes",
+              "size": 32
+            }
           }
         },
         {
           "name": "player2",
           "type": {
-            "kind": "bytes",
-            "size": 32
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "bytes",
+              "size": 32
+            }
           }
         },
         {
           "name": "turn",
           "type": {
-            "kind": "bytes",
-            "size": 32
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "bytes",
+              "size": 32
+            }
           }
         },
         {
           "name": "winner",
           "type": {
-            "kind": "bytes",
-            "size": 32
-          },
-          "nullable": true
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "bytes",
+              "size": 32
+            }
+          }
         },
         {
           "name": "placed_p1",
           "type": {
-            "kind": "bool"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "bool"
+            }
           }
         },
         {
           "name": "placed_p2",
           "type": {
-            "kind": "bool"
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "kind": "bool"
+            }
           }
         },
         {
-          "name": "pending_x",
+          "name": "pending",
           "type": {
-            "kind": "u32"
-          },
-          "nullable": true
-        },
-        {
-          "name": "pending_y",
-          "type": {
-            "kind": "u32"
-          },
-          "nullable": true
-        },
-        {
-          "name": "pending_shooter",
-          "type": {
-            "kind": "bytes",
-            "size": 32
-          },
-          "nullable": true
-        },
-        {
-          "name": "pending_target",
-          "type": {
-            "kind": "bytes",
-            "size": 32
-          },
-          "nullable": true
+            "kind": "record",
+            "fields": [],
+            "crdt_type": "lww_register",
+            "inner_type": {
+              "$ref": "PendingShot"
+            }
+          }
         },
         {
           "name": "shots_p1",
           "type": {
-            "$ref": "Board"
+            "kind": "map",
+            "key": {
+              "kind": "string"
+            },
+            "value": {
+              "kind": "record",
+              "fields": [],
+              "crdt_type": "lww_register",
+              "inner_type": {
+                "kind": "u32"
+              }
+            },
+            "crdt_type": "unordered_map"
           }
         },
         {
           "name": "shots_p2",
           "type": {
-            "$ref": "Board"
+            "kind": "map",
+            "key": {
+              "kind": "string"
+            },
+            "value": {
+              "kind": "record",
+              "fields": [],
+              "crdt_type": "lww_register",
+              "inner_type": {
+                "kind": "u32"
+              }
+            },
+            "crdt_type": "unordered_map"
+          }
+        },
+        {
+          "name": "commitments",
+          "type": {
+            "kind": "map",
+            "key": {
+              "kind": "string"
+            },
+            "value": {
+              "kind": "record",
+              "fields": [],
+              "crdt_type": "lww_register",
+              "inner_type": {
+                "kind": "bytes",
+                "size": 32
+              }
+            }
           }
         }
       ]
@@ -269,6 +416,37 @@
           "name": "board",
           "type": {
             "kind": "bytes"
+          }
+        }
+      ]
+    },
+    "PendingShot": {
+      "kind": "record",
+      "fields": [
+        {
+          "name": "x",
+          "type": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "y",
+          "type": {
+            "kind": "u32"
+          }
+        },
+        {
+          "name": "shooter",
+          "type": {
+            "kind": "bytes",
+            "size": 32
+          }
+        },
+        {
+          "name": "target",
+          "type": {
+            "kind": "bytes",
+            "size": 32
           }
         }
       ]
@@ -292,6 +470,19 @@
           "name": "placed",
           "type": {
             "kind": "bool"
+          }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "kind": "bytes",
+            "size": 16
+          }
+        },
+        {
+          "name": "pristine",
+          "type": {
+            "kind": "bytes"
           }
         }
       ]
@@ -415,6 +606,12 @@
             "kind": "string"
           },
           "nullable": true
+        },
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
         }
       ],
       "returns": {
@@ -482,6 +679,61 @@
       ],
       "returns": {
         "kind": "string"
+      }
+    },
+    {
+      "name": "reveal_board",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
+      }
+    },
+    {
+      "name": "export_board_seed",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ],
+      "returns": {
+        "$ref": "ExportedSeed"
+      }
+    },
+    {
+      "name": "import_board_seed",
+      "params": [
+        {
+          "name": "match_id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "board_bytes",
+          "type": {
+            "kind": "bytes"
+          }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "kind": "bytes",
+            "size": 16
+          }
+        }
+      ],
+      "returns": {
+        "kind": "unit"
       }
     },
     {
@@ -565,6 +817,30 @@
       "name": "ShipsPlaced",
       "payload": {
         "$ref": "Event_ShipsPlaced"
+      }
+    },
+    {
+      "name": "BoardCommitted",
+      "payload": {
+        "$ref": "Event_BoardCommitted"
+      }
+    },
+    {
+      "name": "BoardRevealed",
+      "payload": {
+        "$ref": "Event_BoardRevealed"
+      }
+    },
+    {
+      "name": "AuditPassed",
+      "payload": {
+        "$ref": "Event_AuditPassed"
+      }
+    },
+    {
+      "name": "AuditFailed",
+      "payload": {
+        "$ref": "Event_AuditFailed"
       }
     },
     {

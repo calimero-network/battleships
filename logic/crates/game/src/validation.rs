@@ -55,10 +55,10 @@
 //!     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
 //!         let length = input.ship_length
 //!             .or_else(|| input.coordinates.as_ref().map(|coords| coords.len() as u8))
-//!             .ok_or_else(|| GameError::Invalid("ship length required"))?;
+//!             .ok_or_else(|| GameError::Invalid("ship length required".into()))?;
 //!
 //!         if length < self.min_length || length > self.max_length {
-//!             return Err(GameError::Invalid("ship length out of custom range"));
+//!             return Err(GameError::Invalid("ship length out of custom range".into()));
 //!         }
 //!         Ok(())
 //!     }
@@ -221,13 +221,13 @@ pub struct BoundsValidationStrategy;
 impl ValidationStrategy for BoundsValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
-            "coordinates required for bounds validation",
+            "coordinates required for bounds validation".into(),
         ))?;
         let size = input.size.unwrap_or(BOARD_SIZE);
 
         for coord in coordinates {
             if coord.x >= size || coord.y >= size {
-                return Err(GameError::Invalid("coordinate out of bounds"));
+                return Err(GameError::Invalid("coordinate out of bounds".into()));
             }
         }
         Ok(())
@@ -247,13 +247,13 @@ pub struct UniquenessValidationStrategy;
 impl ValidationStrategy for UniquenessValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
-            "coordinates required for uniqueness validation",
+            "coordinates required for uniqueness validation".into(),
         ))?;
 
         let mut set = std::collections::BTreeSet::new();
         for &coord in coordinates {
             if !set.insert(coord) {
-                return Err(GameError::Invalid("duplicate coordinate"));
+                return Err(GameError::Invalid("duplicate coordinate".into()));
             }
         }
         Ok(())
@@ -269,18 +269,17 @@ pub struct OverlapValidationStrategy;
 
 impl ValidationStrategy for OverlapValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
-        let board = input
-            .board
-            .as_ref()
-            .ok_or(GameError::Invalid("board required for overlap validation"))?;
+        let board = input.board.as_ref().ok_or(GameError::Invalid(
+            "board required for overlap validation".into(),
+        ))?;
         let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
-            "coordinates required for overlap validation",
+            "coordinates required for overlap validation".into(),
         ))?;
         let size = input.size.unwrap_or(BOARD_SIZE);
 
         for &coord in coordinates {
             if matches!(board.get(size, coord.x, coord.y), Cell::Ship) {
-                return Err(GameError::Invalid("overlap with existing ship"));
+                return Err(GameError::Invalid("overlap with existing ship".into()));
             }
         }
         Ok(())
@@ -297,16 +296,16 @@ pub struct AdjacencyValidationStrategy;
 impl ValidationStrategy for AdjacencyValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let board = input.board.as_ref().ok_or(GameError::Invalid(
-            "board required for adjacency validation",
+            "board required for adjacency validation".into(),
         ))?;
         let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
-            "coordinates required for adjacency validation",
+            "coordinates required for adjacency validation".into(),
         ))?;
         let size = input.size.unwrap_or(BOARD_SIZE);
 
         for &coord in coordinates {
             if board.is_adjacent_violation(size, coord.x, coord.y) {
-                return Err(GameError::Invalid("adjacent to existing ship"));
+                return Err(GameError::Invalid("adjacent to existing ship".into()));
             }
         }
         Ok(())
@@ -323,7 +322,7 @@ pub struct StraightLineValidationStrategy;
 impl ValidationStrategy for StraightLineValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
-            "coordinates required for straight line validation",
+            "coordinates required for straight line validation".into(),
         ))?;
 
         if coordinates.len() <= 1 {
@@ -335,7 +334,7 @@ impl ValidationStrategy for StraightLineValidationStrategy {
 
         if !(same_x ^ same_y) {
             return Err(GameError::Invalid(
-                "ship must be straight (horizontal or vertical)",
+                "ship must be straight (horizontal or vertical)".into(),
             ));
         }
         Ok(())
@@ -352,7 +351,7 @@ pub struct ContiguityValidationStrategy;
 impl ValidationStrategy for ContiguityValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let coordinates = input.coordinates.as_ref().ok_or(GameError::Invalid(
-            "coordinates required for contiguity validation",
+            "coordinates required for contiguity validation".into(),
         ))?;
 
         if coordinates.len() <= 1 {
@@ -374,7 +373,7 @@ impl ValidationStrategy for ContiguityValidationStrategy {
             let step = if same_x { (0i16, 1i16) } else { (1i16, 0i16) };
             let dx = (b.x as i16 - a.x as i16, b.y as i16 - a.y as i16);
             if dx != step {
-                return Err(GameError::Invalid("ship must be contiguous"));
+                return Err(GameError::Invalid("ship must be contiguous".into()));
             }
         }
         Ok(())
@@ -394,11 +393,13 @@ impl ValidationStrategy for ShipLengthValidationStrategy {
             .ship_length
             .or_else(|| input.coordinates.as_ref().map(|coords| coords.len() as u8))
             .ok_or(GameError::Invalid(
-                "ship length required for length validation",
+                "ship length required for length validation".into(),
             ))?;
 
         if !(2..=5).contains(&length) {
-            return Err(GameError::Invalid("ship length must be between 2 and 5"));
+            return Err(GameError::Invalid(
+                "ship length must be between 2 and 5".into(),
+            ));
         }
         Ok(())
     }
@@ -414,21 +415,23 @@ pub struct FleetCompositionValidationStrategy;
 impl ValidationStrategy for FleetCompositionValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let composition = input.fleet_composition.ok_or({
-            GameError::Invalid("fleet composition required for composition validation")
+            GameError::Invalid("fleet composition required for composition validation".into())
         })?;
 
         // Standard battleship fleet: 1x5, 1x4, 2x3, 1x2
         if composition[3] != 1 {
-            return Err(GameError::Invalid("need exactly 1 ship of length 5"));
+            return Err(GameError::Invalid("need exactly 1 ship of length 5".into()));
         }
         if composition[2] != 1 {
-            return Err(GameError::Invalid("need exactly 1 ship of length 4"));
+            return Err(GameError::Invalid("need exactly 1 ship of length 4".into()));
         }
         if composition[1] != 2 {
-            return Err(GameError::Invalid("need exactly 2 ships of length 3"));
+            return Err(GameError::Invalid(
+                "need exactly 2 ships of length 3".into(),
+            ));
         }
         if composition[0] != 1 {
-            return Err(GameError::Invalid("need exactly 1 ship of length 2"));
+            return Err(GameError::Invalid("need exactly 1 ship of length 2".into()));
         }
         Ok(())
     }
@@ -444,7 +447,7 @@ pub struct ShipOverlapValidationStrategy;
 impl ValidationStrategy for ShipOverlapValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let ships = input.ships.as_ref().ok_or(GameError::Invalid(
-            "ships required for ship overlap validation",
+            "ships required for ship overlap validation".into(),
         ))?;
 
         for i in 0..ships.len() {
@@ -452,7 +455,7 @@ impl ValidationStrategy for ShipOverlapValidationStrategy {
                 for coord1 in &ships[i] {
                     for coord2 in &ships[j] {
                         if coord1 == coord2 {
-                            return Err(GameError::Invalid("ships overlap"));
+                            return Err(GameError::Invalid("ships overlap".into()));
                         }
                     }
                 }
@@ -472,7 +475,7 @@ pub struct ShipAdjacencyValidationStrategy;
 impl ValidationStrategy for ShipAdjacencyValidationStrategy {
     fn validate(&self, input: &ValidationInput) -> Result<(), GameError> {
         let ships = input.ships.as_ref().ok_or(GameError::Invalid(
-            "ships required for ship adjacency validation",
+            "ships required for ship adjacency validation".into(),
         ))?;
 
         for i in 0..ships.len() {
@@ -482,7 +485,7 @@ impl ValidationStrategy for ShipAdjacencyValidationStrategy {
                         let dx = (coord1.x as i16 - coord2.x as i16).abs();
                         let dy = (coord1.y as i16 - coord2.y as i16).abs();
                         if dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0) {
-                            return Err(GameError::Invalid("ships are adjacent"));
+                            return Err(GameError::Invalid("ships are adjacent".into()));
                         }
                     }
                 }

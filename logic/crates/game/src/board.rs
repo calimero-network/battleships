@@ -90,7 +90,7 @@ pub struct Coordinate {
 impl Coordinate {
     pub fn new(x: u8, y: u8) -> Result<Coordinate, GameError> {
         if x >= BOARD_SIZE || y >= BOARD_SIZE {
-            return Err(GameError::Invalid("coordinate out of bounds"));
+            return Err(GameError::Invalid("coordinate out of bounds".into()));
         }
         Ok(Coordinate { x, y })
     }

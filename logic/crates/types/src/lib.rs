@@ -7,12 +7,26 @@ use thiserror::Error;
 pub enum GameError {
     #[error("not found: {0}")]
     NotFound(String),
+    // String (not &'static str) so call sites can format the underlying
+    // error into the message instead of discarding it. The vast majority
+    // of call sites used to be `.map_err(|_| Invalid("foo failed"))`,
+    // which threw away every storage / parse / IO error in the codebase.
     #[error("invalid input: {0}")]
-    Invalid(&'static str),
+    Invalid(String),
     #[error("forbidden: {0}")]
-    Forbidden(&'static str),
+    Forbidden(String),
     #[error("already finished")]
     Finished,
+    #[error("match id already exists")]
+    MatchIdCollision,
+    #[error("board commitment already set")]
+    AlreadyCommitted,
+    #[error("commitment hash does not match revealed board")]
+    CommitmentMismatch,
+    #[error("audit failed: {reason}")]
+    AuditFailed { reason: String },
+    #[error("private board not found for this match")]
+    BoardNotFound,
 }
 
 /// Player public key — 32-byte Ed25519 key with base58 encoding.
@@ -25,9 +39,9 @@ impl PublicKey {
     pub fn from_base58(encoded: &str) -> Result<PublicKey, GameError> {
         let decoded = bs58::decode(encoded)
             .into_vec()
-            .map_err(|_| GameError::Invalid("bad base58 key"))?;
+            .map_err(|e| GameError::Invalid(format!("bad base58 key: {e}")))?;
         if decoded.len() != 32 {
-            return Err(GameError::Invalid("key length"));
+            return Err(GameError::Invalid("key length".into()));
         }
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&decoded);
@@ -42,7 +56,6 @@ impl PublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use borsh;
 
     #[test]
     fn public_key_base58_roundtrip() {
@@ -76,5 +89,14 @@ mod tests {
         let err = GameError::NotFound("test".into());
         assert!(err.to_string().contains("test"));
         assert!(GameError::Finished.to_string().contains("finished"));
+    }
+
+    #[test]
+    fn error_variants_exist() {
+        let _ = GameError::MatchIdCollision;
+        let _ = GameError::AlreadyCommitted;
+        let _ = GameError::CommitmentMismatch;
+        let _ = GameError::AuditFailed { reason: "x".into() };
+        let _ = GameError::BoardNotFound;
     }
 }

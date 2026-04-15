@@ -83,12 +83,21 @@ use calimero_storage::collections::UnorderedMap;
 #[borsh(crate = "calimero_sdk::borsh")]
 #[serde(crate = "calimero_sdk::serde")]
 pub struct PlayerBoard {
-    /// The player's private board with ship placements
+    /// The player's private board — mutated in-place as shots resolve
+    /// (Ship -> Hit, Empty -> Miss).
     own: Board,
     /// Number of ships remaining (decremented when hit)
     ships: u64,
     /// Whether the player has finished placing their ships
     placed: bool,
+    /// Commitment salt — 16 random bytes mixed into SHA256(pristine || salt)
+    /// at placement time (Task 7). Stored privately alongside the board so
+    /// the audit (Task 9) can recompute and verify the commitment hash.
+    salt: [u8; 16],
+    /// Pristine board bytes captured at placement time, used to recompute
+    /// the commitment during audit/reveal/import. `own` is mutated as shots
+    /// resolve, so we can't hash it. Empty until the first `place_ships`.
+    pristine: Vec<u8>,
 }
 
 impl Default for PlayerBoard {
@@ -103,12 +112,46 @@ impl PlayerBoard {
             own: Board::new_zeroed(BOARD_SIZE),
             ships: 0,
             placed: false,
+            salt: [0u8; 16],
+            pristine: Vec::new(),
         }
+    }
+
+    pub fn new_with_salt(own: Board, ships: u64, placed: bool, salt: [u8; 16]) -> PlayerBoard {
+        let pristine = own.0.clone();
+        PlayerBoard {
+            own,
+            ships,
+            placed,
+            salt,
+            pristine,
+        }
+    }
+
+    pub fn salt(&self) -> &[u8; 16] {
+        &self.salt
+    }
+
+    pub fn set_salt(&mut self, salt: [u8; 16]) {
+        self.salt = salt;
+    }
+
+    /// Pristine board cells captured at placement time. Empty until
+    /// `capture_pristine()` is called (usually inside `place_ships`).
+    pub fn pristine(&self) -> &[u8] {
+        &self.pristine
+    }
+
+    /// Snapshot the current `own` board as the pristine commitment input.
+    /// Must be called immediately after ship placement succeeds, before
+    /// any shots are resolved against this board.
+    pub fn capture_pristine(&mut self) {
+        self.pristine = self.own.0.clone();
     }
 
     pub fn place_ships(&mut self, ships: Vec<String>) -> Result<(), GameError> {
         if self.placed {
-            return Err(GameError::Invalid("already placed"));
+            return Err(GameError::Invalid("already placed".into()));
         }
 
         let mut ship_counts = [0; 4]; // [2,3,4,5] lengths
@@ -123,12 +166,12 @@ impl PlayerBoard {
 
             let ship_len = coords.len();
             if !(2..=5).contains(&ship_len) {
-                return Err(GameError::Invalid("ship length must be 2-5"));
+                return Err(GameError::Invalid("ship length must be 2-5".into()));
             }
 
             let idx = ship_len - 2;
             if idx >= 4 {
-                return Err(GameError::Invalid("invalid ship length"));
+                return Err(GameError::Invalid("invalid ship length".into()));
             }
             ship_counts[idx] += 1;
             total_ships += 1;
@@ -146,7 +189,7 @@ impl PlayerBoard {
         }
 
         if total_ships == 0 {
-            return Err(GameError::Invalid("no ships"));
+            return Err(GameError::Invalid("no ships".into()));
         }
 
         // Use validation strategy pattern for fleet composition
@@ -208,5 +251,47 @@ impl Default for PrivateBoards {
 impl PrivateBoards {
     pub fn key(match_id: &str) -> String {
         match_id.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn player_board_default_has_zero_salt() {
+        let pb = PlayerBoard::default();
+        assert_eq!(pb.salt(), &[0u8; 16]);
+    }
+
+    #[test]
+    fn player_board_stores_custom_salt() {
+        let board = Board::new_zeroed(BOARD_SIZE);
+        let pb = PlayerBoard::new_with_salt(board, 0, false, [7u8; 16]);
+        assert_eq!(pb.salt(), &[7u8; 16]);
+    }
+
+    #[test]
+    fn player_board_set_salt_updates_field() {
+        let mut pb = PlayerBoard::new();
+        assert_eq!(pb.salt(), &[0u8; 16]);
+        pb.set_salt([42u8; 16]);
+        assert_eq!(pb.salt(), &[42u8; 16]);
+    }
+
+    #[test]
+    fn capture_pristine_snapshots_current_own_board() {
+        let mut pb = PlayerBoard::new();
+        assert!(pb.pristine().is_empty());
+        pb.get_board_mut().set(BOARD_SIZE, 0, 0, Cell::Ship);
+        pb.get_board_mut().set(BOARD_SIZE, 5, 5, Cell::Ship);
+        pb.capture_pristine();
+        // Mutate after snapshot — pristine must not change.
+        pb.get_board_mut().set(BOARD_SIZE, 0, 0, Cell::Hit);
+        let pristine = pb.pristine();
+        assert_eq!(Cell::from_u8(pristine[0]), Cell::Ship);
+        assert_eq!(Cell::from_u8(pristine[55]), Cell::Ship);
+        // own is mutated, pristine is not.
+        assert_eq!(pb.get_board().get(BOARD_SIZE, 0, 0), Cell::Hit);
     }
 }

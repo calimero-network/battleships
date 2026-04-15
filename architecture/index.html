@@ -27,12 +27,12 @@
 <header class="hero">
   <div class="hero-badge">ARCHITECTURE</div>
   <h1>Battleships on <span class="accent-text">Calimero</span></h1>
-  <p class="hero-sub">A multi-service P2P battleship game using namespaces, private storage, and CRDT-based state sync</p>
+  <p class="hero-sub">A multi-service P2P battleship game using namespaces, private storage, CRDT-based state sync, and a SHA256 commit-reveal anti-cheat scheme</p>
   <div class="hero-stats">
     <div class="hero-stat"><span class="stat-val">2</span><span class="stat-lbl">WASM Services</span></div>
     <div class="hero-stat"><span class="stat-val">P2P</span><span class="stat-lbl">No Server</span></div>
     <div class="hero-stat"><span class="stat-val">CRDT</span><span class="stat-lbl">Auto-Sync</span></div>
-    <div class="hero-stat"><span class="stat-val">E2E</span><span class="stat-lbl">Private Boards</span></div>
+    <div class="hero-stat"><span class="stat-val">SHA256</span><span class="stat-lbl">Commit-Reveal</span></div>
   </div>
 </header>
 
@@ -265,7 +265,7 @@
       <text x="80" y="242" class="svg-tiny" fill="#8b949e">create_match, set_match_context_id,</text>
       <text x="80" y="256" class="svg-tiny" fill="#8b949e">get_matches, get_player_stats,</text>
       <text x="80" y="270" class="svg-tiny" fill="#8b949e">get_history, on_match_finished</text>
-      <text x="80" y="290" class="svg-tiny" fill="#e3b341">3 events</text>
+      <text x="80" y="290" class="svg-tiny" fill="#e3b341">4 events &middot; CRDT state</text>
 
       <!-- Game service box -->
       <rect x="600" y="145" width="240" height="155" rx="12" fill="#0f1923" stroke="#a371f7" stroke-width="1.5"/>
@@ -274,11 +274,11 @@
       <text x="720" y="170" text-anchor="middle" class="svg-small" fill="#a371f7">Game Service</text>
 
       <text x="620" y="206" class="svg-tiny" fill="#8b949e">game.wasm</text>
-      <text x="620" y="224" class="svg-tiny" fill="#58a6ff">9 methods</text>
-      <text x="620" y="242" class="svg-tiny" fill="#8b949e">place_ships, propose_shot,</text>
-      <text x="620" y="256" class="svg-tiny" fill="#8b949e">acknowledge_shot, get_own_board,</text>
-      <text x="620" y="270" class="svg-tiny" fill="#8b949e">get_shots, get_active_match_id, ...</text>
-      <text x="620" y="290" class="svg-tiny" fill="#e3b341">5 events</text>
+      <text x="620" y="224" class="svg-tiny" fill="#58a6ff">12 methods</text>
+      <text x="620" y="242" class="svg-tiny" fill="#8b949e">place_ships (+commit), propose_shot,</text>
+      <text x="620" y="256" class="svg-tiny" fill="#8b949e">acknowledge_shot (+audit), reveal_board,</text>
+      <text x="620" y="270" class="svg-tiny" fill="#8b949e">export/import_board_seed, ...</text>
+      <text x="620" y="290" class="svg-tiny" fill="#e3b341">9 events &middot; flattened CRDT state</text>
 
       <!-- Manifest/ABI center -->
       <rect x="370" y="145" width="160" height="80" rx="8" fill="#0f1923" stroke="#e3b341" stroke-width="1" stroke-dasharray="4 2"/>
@@ -304,7 +304,7 @@
 <section class="section" id="private-storage">
   <div class="section-label">04</div>
   <h2>Private Storage</h2>
-  <p class="section-desc">Ship placements are the core secret. Each player's board is stored locally and never replicated.</p>
+  <p class="section-desc">Ship placements are the core secret: each player's board is stored locally and never replicated. A SHA256 commitment is published up-front so the placement cannot be changed mid-game.</p>
 
   <div class="diagram-wrap">
     <svg class="private-diagram" viewBox="0 0 900 300" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -345,17 +345,19 @@
         <rect x="96" y="10" width="12" height="20" rx="2" fill="#3fb950" opacity="0.6"/>
       </g>
       <text x="140" y="225" text-anchor="middle" class="svg-tiny" fill="#8b949e">Ship positions</text>
-      <text x="140" y="240" text-anchor="middle" class="svg-tiny" fill="#8b949e">+ cell count</text>
+      <text x="140" y="240" text-anchor="middle" class="svg-tiny" fill="#8b949e">+ salt + pristine snapshot</text>
 
       <!-- Shared zone -->
       <rect x="240" y="68" width="160" height="190" rx="10" fill="#101820" stroke="#58a6ff" stroke-width="1.5"/>
       <text x="320" y="92" text-anchor="middle" class="svg-tiny" fill="#58a6ff">SHARED (CRDT)</text>
-      <text x="260" y="118" class="svg-tiny" fill="#8b949e">Match state</text>
-      <text x="260" y="138" class="svg-tiny" fill="#8b949e">Current turn</text>
-      <text x="260" y="158" class="svg-tiny" fill="#8b949e">Shot results (hit/miss)</text>
-      <text x="260" y="178" class="svg-tiny" fill="#8b949e">placed_p1 / placed_p2</text>
-      <text x="260" y="198" class="svg-tiny" fill="#8b949e">Winner</text>
-      <text x="260" y="218" class="svg-tiny" fill="#8b949e">Pending shots</text>
+      <text x="260" y="112" class="svg-tiny" fill="#8b949e">LwwRegister: turn, winner,</text>
+      <text x="260" y="124" class="svg-tiny" fill="#8b949e">pending, placed_p1/p2</text>
+      <text x="260" y="144" class="svg-tiny" fill="#8b949e">UnorderedMap: shots_p1,</text>
+      <text x="260" y="156" class="svg-tiny" fill="#8b949e">shots_p2 (per-cell LWW)</text>
+      <text x="260" y="176" class="svg-tiny" fill="#a5ff11">UserStorage: commitment_p1</text>
+      <text x="260" y="188" class="svg-tiny" fill="#a5ff11">(SHA256, writer-authed)</text>
+      <text x="260" y="208" class="svg-tiny" fill="#8b949e">Lobby: matches, stats (Counter),</text>
+      <text x="260" y="220" class="svg-tiny" fill="#8b949e">history (Vector)</text>
 
       <!-- Sync arrows -->
       <defs>
@@ -385,12 +387,14 @@
 
       <rect x="500" y="68" width="160" height="190" rx="10" fill="#101820" stroke="#58a6ff" stroke-width="1.5"/>
       <text x="580" y="92" text-anchor="middle" class="svg-tiny" fill="#58a6ff">SHARED (CRDT)</text>
-      <text x="520" y="118" class="svg-tiny" fill="#8b949e">Match state</text>
-      <text x="520" y="138" class="svg-tiny" fill="#8b949e">Current turn</text>
-      <text x="520" y="158" class="svg-tiny" fill="#8b949e">Shot results (hit/miss)</text>
-      <text x="520" y="178" class="svg-tiny" fill="#8b949e">placed_p1 / placed_p2</text>
-      <text x="520" y="198" class="svg-tiny" fill="#8b949e">Winner</text>
-      <text x="520" y="218" class="svg-tiny" fill="#8b949e">Pending shots</text>
+      <text x="520" y="112" class="svg-tiny" fill="#8b949e">LwwRegister: turn, winner,</text>
+      <text x="520" y="124" class="svg-tiny" fill="#8b949e">pending, placed_p1/p2</text>
+      <text x="520" y="144" class="svg-tiny" fill="#8b949e">UnorderedMap: shots_p1,</text>
+      <text x="520" y="156" class="svg-tiny" fill="#8b949e">shots_p2 (per-cell LWW)</text>
+      <text x="520" y="176" class="svg-tiny" fill="#a5ff11">UserStorage: commitment_p2</text>
+      <text x="520" y="188" class="svg-tiny" fill="#a5ff11">(SHA256, writer-authed)</text>
+      <text x="520" y="208" class="svg-tiny" fill="#8b949e">Lobby: matches, stats (Counter),</text>
+      <text x="520" y="220" class="svg-tiny" fill="#8b949e">history (Vector)</text>
 
       <rect x="680" y="68" width="160" height="190" rx="10" fill="#1a1215" stroke="#f85149" stroke-width="1.5" stroke-dasharray="6 3"/>
       <text x="760" y="92" text-anchor="middle" class="svg-tiny" fill="#f85149">PRIVATE</text>
@@ -422,8 +426,19 @@
         <rect x="48" y="80" width="24" height="10" rx="2" fill="#a371f7" opacity="0.6"/>
       </g>
       <text x="760" y="225" text-anchor="middle" class="svg-tiny" fill="#8b949e">Ship positions</text>
-      <text x="760" y="240" text-anchor="middle" class="svg-tiny" fill="#8b949e">+ cell count</text>
+      <text x="760" y="240" text-anchor="middle" class="svg-tiny" fill="#8b949e">+ salt + pristine snapshot</text>
     </svg>
+  </div>
+
+  <div class="callout-row">
+    <div class="callout">
+      <div class="callout-icon" style="color:#a5ff11">&#9670;</div>
+      <div><strong>Commitment.</strong> At placement, each player computes <code>SHA256(pristine_board || salt)</code> and writes it to <code>UserStorage</code>. The slot is writer-authorised — only that player can ever write their own commitment, and a second write is rejected with <code>AlreadyCommitted</code>.</div>
+    </div>
+    <div class="callout">
+      <div class="callout-icon" style="color:#f85149">&#10005;</div>
+      <div><strong>Reveal + audit.</strong> On the winning shot (or via <code>reveal_board</code>) the contract recomputes the hash against the pristine snapshot and replays every recorded shot against the revealed board. Tampering or lying hits produce <code>AuditFailed</code>.</div>
+    </div>
   </div>
 </section>
 
@@ -524,22 +539,22 @@
 
     <div class="flow-step" style="--step-color: #f85149">
       <div class="flow-num">6</div>
-      <div class="flow-title">Place Ships</div>
-      <div class="flow-desc">Both players place ships in <strong>private storage</strong>. <code>placed_p1</code>/<code>placed_p2</code> flags synced via CRDT.</div>
+      <div class="flow-title">Place Ships + Commit</div>
+      <div class="flow-desc">Ships stored in <strong>private storage</strong>. <code>SHA256(pristine || salt)</code> published to writer-authorised <code>UserStorage</code>. Write-once: second attempt returns <code>AlreadyCommitted</code>.</div>
       <svg class="flow-connector" viewBox="0 0 40 20" fill="none"><path d="M20 0 L20 20" stroke="var(--step-color)" stroke-width="1.5" stroke-dasharray="3 2"/></svg>
     </div>
 
     <div class="flow-step" style="--step-color: #f0883e">
       <div class="flow-num">7</div>
       <div class="flow-title">Take Turns</div>
-      <div class="flow-desc"><code>propose_shot</code> &rarr; event triggers <code>acknowledge_shot_handler</code> on target node &rarr; resolves against private board &rarr; result synced.</div>
+      <div class="flow-desc"><code>propose_shot</code> &rarr; event triggers <code>acknowledge_shot_handler</code> on target node &rarr; resolves against private board &rarr; per-cell <code>UnorderedMap</code> entries merge via LWW.</div>
       <svg class="flow-connector" viewBox="0 0 40 20" fill="none"><path d="M20 0 L20 20" stroke="var(--step-color)" stroke-width="1.5" stroke-dasharray="3 2"/></svg>
     </div>
 
     <div class="flow-step final" style="--step-color: #e3b341">
       <div class="flow-num">8</div>
-      <div class="flow-title">Game Ends</div>
-      <div class="flow-desc">All ships sunk &rarr; winner set &rarr; <code>xcall</code> to lobby &rarr; stats and history updated.</div>
+      <div class="flow-title">Winning Shot + Audit</div>
+      <div class="flow-desc">All ships sunk &rarr; inline audit recomputes commitment from pristine snapshot &rarr; replays every shot against the revealed board &rarr; <code>AuditPassed</code>/<code>AuditFailed</code> &rarr; <code>xcall</code> to lobby updates Counter-backed stats.</div>
     </div>
   </div>
 </section>
@@ -550,7 +565,7 @@
 <section class="section" id="crdt">
   <div class="section-label">07</div>
   <h2>CRDT State Sync</h2>
-  <p class="section-desc">All shared state replicates automatically between nodes. Each mutation creates a delta broadcast via gossipsub.</p>
+  <p class="section-desc">All shared state replicates automatically between nodes. Each mutation creates a delta broadcast via gossipsub. Primitives used: <code>LwwRegister</code> for single-writer fields, <code>UnorderedMap</code> for per-key add-wins, <code>Counter</code> for G-Counter stat increments, <code>UserStorage</code> for writer-authorised per-player slots, and <code>Vector</code> for append-only history.</p>
 
   <div class="trait-grid">
     <div class="trait-card" style="--tc: #3fb950">
@@ -595,9 +610,9 @@
     <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> src/api/lobby/ <span class="tree-dim">&mdash; LobbyClient (codegen)</span></div>
     <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9492;&#9472;</span> src/api/game/ <span class="tree-dim">&mdash; GameClient (codegen)</span></div>
     <div class="tree-item l1"><span class="tree-branch">&#9500;&#9472;</span> <span class="tree-folder">logic/</span> <span class="tree-tag tag-rust">Cargo Workspace</span></div>
-    <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> crates/types/ <span class="tree-dim">&mdash; GameError, PublicKey (no SDK dep)</span></div>
-    <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> crates/lobby/ <span class="tree-dim">&mdash; LobbyState + 6 methods &rarr; lobby.wasm</span></div>
-    <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> crates/game/ <span class="tree-dim">&mdash; GameState + 9 methods &rarr; game.wasm</span></div>
+    <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> crates/types/ <span class="tree-dim">&mdash; GameError (incl. audit variants), ExportedSeed, PublicKey</span></div>
+    <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> crates/lobby/ <span class="tree-dim">&mdash; LobbyState (CRDT collections) + 6 methods &rarr; lobby.wasm</span></div>
+    <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9500;&#9472;</span> crates/game/ <span class="tree-dim">&mdash; GameState (flattened CRDT fields) + 12 methods + audit.rs &rarr; game.wasm</span></div>
     <div class="tree-item l2"><span class="tree-branch">&#9474;&nbsp; &#9492;&#9472;</span> build-bundle.sh <span class="tree-dim">&mdash; builds both + packages .mpk</span></div>
     <div class="tree-item l1"><span class="tree-branch">&#9492;&#9472;</span> <span class="tree-folder">e2e/</span> <span class="tree-tag tag-test">merobox</span> <span class="tree-dim">&mdash; E2E workflow</span></div>
   </div>
@@ -620,6 +635,7 @@
     <div class="feature-card" style="--fc: #f778ba"><h3>Capabilities</h3><p>Fine-grained permission bits for member actions</p></div>
     <div class="feature-card" style="--fc: #e3b341"><h3>Governance DAG</h3><p>Membership, roles, and context registration via signed ops</p></div>
     <div class="feature-card" style="--fc: #f85149"><h3>Subgroups</h3><p>Per-match access isolation &mdash; only 2 players per match group</p></div>
+    <div class="feature-card" style="--fc: #a5ff11"><h3>Commit-Reveal</h3><p>SHA256 commitment in UserStorage + pristine-board reveal with full shot-replay audit</p></div>
   </div>
 </section>
 

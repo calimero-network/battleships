@@ -108,18 +108,20 @@ pub struct Ship {
 impl Ship {
     pub fn new(coordinates: Vec<Coordinate>) -> Result<Ship, GameError> {
         if coordinates.is_empty() {
-            return Err(GameError::Invalid("ship cannot be empty"));
+            return Err(GameError::Invalid("ship cannot be empty".into()));
         }
 
         let length = coordinates.len() as u8;
         if !(2..=5).contains(&length) {
-            return Err(GameError::Invalid("ship length must be 2-5"));
+            return Err(GameError::Invalid("ship length must be 2-5".into()));
         }
 
         // Validate all coordinates are valid
         for coord in &coordinates {
             if !coord.is_valid() {
-                return Err(GameError::Invalid("ship contains invalid coordinates"));
+                return Err(GameError::Invalid(
+                    "ship contains invalid coordinates".into(),
+                ));
             }
         }
 
@@ -250,7 +252,7 @@ impl Fleet {
         for ship in &ships {
             let idx = (ship.length - 2) as usize;
             if idx >= 4 {
-                return Err(GameError::Invalid("invalid ship length"));
+                return Err(GameError::Invalid("invalid ship length".into()));
             }
             ship_counts[idx] += 1;
         }
@@ -288,7 +290,7 @@ impl ShipValidator {
         coords: &[Coordinate],
     ) -> Result<(), GameError> {
         if coords.is_empty() {
-            return Err(GameError::Invalid("empty ship"));
+            return Err(GameError::Invalid("empty ship".into()));
         }
 
         // Use the validation strategy pattern
