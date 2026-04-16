@@ -202,8 +202,6 @@ export function getGameEventEffects(event: AllGameEvents): {
   switch (event.type) {
     case 'MatchCreated':
     case 'ShipsPlaced':
-    case 'BoardCommitted':
-    case 'BoardRevealed':
     case 'Winner':
     case 'MatchEnded':
       return { board: 'debounced', turn: 'none' };
@@ -213,6 +211,8 @@ export function getGameEventEffects(event: AllGameEvents): {
     case 'MatchListUpdated':
     case 'PlayerStatsUpdated':
     case 'MatchIdCollision':
+    case 'BoardCommitted':
+    case 'BoardRevealed':
     case 'AuditPassed':
     case 'AuditFailed':
       return { board: 'none', turn: 'none' };

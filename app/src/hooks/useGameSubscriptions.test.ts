@@ -297,7 +297,9 @@ describe('CRDT-migration event parsers', () => {
     ).toBeNull();
   });
 
-  it('classifies new events as no-op for board/turn refresh', () => {
+  it('classifies commitment/audit events as no-op for board/turn refresh', () => {
+    // BoardCommitted publishes a SHA256 hash — doesn't change cell data
+    // returned by getOwnBoard/getShots, so no board refresh needed.
     expect(
       getGameEventEffects({
         type: 'BoardCommitted',
@@ -305,7 +307,16 @@ describe('CRDT-migration event parsers', () => {
         player: 'pk-1',
         commitment: 'b'.repeat(64),
       }),
-    ).toEqual({ board: 'debounced', turn: 'none' });
+    ).toEqual({ board: 'none', turn: 'none' });
+
+    // BoardRevealed runs the audit; also doesn't change view-layer data.
+    expect(
+      getGameEventEffects({
+        type: 'BoardRevealed',
+        id: 'm-1',
+        player: 'pk-1',
+      }),
+    ).toEqual({ board: 'none', turn: 'none' });
 
     expect(
       getGameEventEffects({
