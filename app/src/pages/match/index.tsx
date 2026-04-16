@@ -28,6 +28,7 @@ export default function MatchPage() {
   const location = useLocation();
   const {
     isAuthenticated,
+    isLoading: authLoading,
     logout,
     mero,
     nodeUrl,
@@ -136,8 +137,14 @@ export default function MatchPage() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!isAuthenticated) navigate('/');
-  }, [isAuthenticated, navigate]);
+    // Wait for the auth SDK to finish initializing before redirecting —
+    // otherwise a transient `isAuthenticated = false` during the loading
+    // phase navigates to '/', the Authenticate page bounces back to
+    // '/lobby' (without the ?id param), and the query-string is lost.
+    if (!authLoading && !isAuthenticated) {
+      navigate('/', { state: { returnTo: location.pathname + location.search } });
+    }
+  }, [authLoading, isAuthenticated, navigate, location.pathname, location.search]);
 
   // URL-driven lobby entry: if `/lobby?id=<ns_id>` is in the address bar,
   // select that namespace and advance to 'lobby' view once it's ready.
