@@ -139,11 +139,25 @@ export default function MatchPage() {
     if (!isAuthenticated) navigate('/');
   }, [isAuthenticated, navigate]);
 
+  // URL-driven lobby entry: if `/lobby?id=<ns_id>` is in the address bar,
+  // select that namespace and advance to 'lobby' view once it's ready.
+  // A bare `/lobby` (no ?id) always stays on 'lobby-select'.
   useEffect(() => {
-    if (view === 'lobby-select' && !manualLobbySelect.current && lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
+    if (view !== 'lobby-select') return;
+    if (manualLobbySelect.current) return;
+    const params = new URLSearchParams(location.search);
+    const urlNsId = params.get('id');
+    if (!urlNsId) return; // bare /lobby → stay on select screen
+    // If the URL says ?id=X but we haven't selected it yet, select it.
+    if (lobby.selectedLobby?.namespaceId !== urlNsId) {
+      lobby.selectLobby(urlNsId);
+      return;
+    }
+    if (lobby.selectedLobby && lobby.lobbyJoined && lobby.lobbyContextId) {
       setView('lobby');
     }
-  }, [view, lobby.selectedLobby, lobby.lobbyJoined, lobby.lobbyContextId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- lobby is an object ref that changes every render; we only need the specific fields listed
+  }, [view, location.search, lobby.selectedLobby, lobby.lobbyJoined, lobby.lobbyContextId]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -595,9 +609,11 @@ export default function MatchPage() {
 
   const handleEnterLobby = useCallback(() => {
     if (!lobby.lobbyContextId) { show({ title: 'No namespace context available', variant: 'error' }); return; }
+    if (!lobby.namespaceId) { show({ title: 'No namespace selected', variant: 'error' }); return; }
     manualLobbySelect.current = false;
     setView('lobby');
-  }, [lobby, show]);
+    navigate(`/lobby?id=${encodeURIComponent(lobby.namespaceId)}`, { replace: true });
+  }, [lobby, show, navigate]);
 
   const resetToLobby = useCallback(() => {
     setMatchId('');
@@ -666,7 +682,7 @@ export default function MatchPage() {
   if (view === 'lobby') {
     return (
       <div className="app-bg">
-        <NavBar {...navProps} onBack={() => { manualLobbySelect.current = true; setView('lobby-select'); }} />
+        <NavBar {...navProps} onBack={() => { manualLobbySelect.current = true; setView('lobby-select'); navigate('/lobby', { replace: true }); }} />
         <div className="page-shell">
           <div className="page-content">
             <LobbyView
