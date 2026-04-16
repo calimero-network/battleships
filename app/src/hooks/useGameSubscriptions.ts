@@ -99,6 +99,35 @@ function toGameEvent(
       return { type: 'MatchListUpdated', id };
     case 'PlayerStatsUpdated':
       return { type: 'PlayerStatsUpdated', id };
+    case 'MatchIdCollision': {
+      const attempted_id =
+        typeof payload.attempted_id === 'string' ? payload.attempted_id : '';
+      if (!attempted_id) return null;
+      return { type: 'MatchIdCollision', id: attempted_id, attempted_id };
+    }
+    case 'BoardCommitted': {
+      const player = typeof payload.player === 'string' ? payload.player : '';
+      const commitment =
+        typeof payload.commitment === 'string' ? payload.commitment : '';
+      if (!id || !player || !commitment) return null;
+      return { type: 'BoardCommitted', id, player, commitment };
+    }
+    case 'BoardRevealed': {
+      const player = typeof payload.player === 'string' ? payload.player : '';
+      if (!id || !player) return null;
+      return { type: 'BoardRevealed', id, player };
+    }
+    case 'AuditPassed': {
+      const player = typeof payload.player === 'string' ? payload.player : '';
+      if (!id || !player) return null;
+      return { type: 'AuditPassed', id, player };
+    }
+    case 'AuditFailed': {
+      const player = typeof payload.player === 'string' ? payload.player : '';
+      const reason = typeof payload.reason === 'string' ? payload.reason : '';
+      if (!id || !player || !reason) return null;
+      return { type: 'AuditFailed', id, player, reason };
+    }
     default:
       return null;
   }
@@ -181,6 +210,11 @@ export function getGameEventEffects(event: AllGameEvents): {
       return { board: 'immediate', turn: 'immediate' };
     case 'MatchListUpdated':
     case 'PlayerStatsUpdated':
+    case 'MatchIdCollision':
+    case 'BoardCommitted':
+    case 'BoardRevealed':
+    case 'AuditPassed':
+    case 'AuditFailed':
       return { board: 'none', turn: 'none' };
     default: {
       const exhaustiveEvent: never = event;

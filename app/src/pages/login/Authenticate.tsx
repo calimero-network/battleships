@@ -1,18 +1,23 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@calimero-network/mero-ui';
 import { useMero, ConnectButton } from '@calimero-network/mero-react';
 import translations from '../../constants/en.global.json';
 
 export default function Authenticate() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useMero();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/lobby');
+      // Preserve the return URL if one was stashed in location.state by
+      // the auth guard (e.g. '/lobby?id=xxx'). Default to '/lobby'.
+      const returnTo =
+        (location.state as { returnTo?: string })?.returnTo || '/lobby';
+      navigate(returnTo, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, location.state]);
 
   return (
     <div className="app-bg">
