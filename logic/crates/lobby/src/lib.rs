@@ -677,5 +677,4 @@ mod tests {
         );
         // The two outcomes disagree → not commutative. Acknowledged.
     }
-
 }
