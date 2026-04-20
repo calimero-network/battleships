@@ -6,7 +6,9 @@ use calimero_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use calimero_sdk::serde::{Deserialize, Serialize};
 use calimero_sdk::types::Error as AppError;
 use calimero_storage::collections::crdt_meta::MergeError;
-use calimero_storage::collections::{Counter, LwwRegister, Mergeable, UnorderedMap, Vector};
+use calimero_storage::collections::{
+    Counter, FrozenValue, LwwRegister, Mergeable, UnorderedMap, Vector,
+};
 use calimero_storage::env as storage_env;
 use calimero_storage_macros::Mergeable;
 
@@ -124,17 +126,9 @@ pub struct MatchRecord {
     pub finished_ms: u64,
 }
 
-impl Mergeable for MatchRecord {
-    fn merge(&mut self, other: &Self) -> Result<(), MergeError> {
-        // History records are append-only and immutable per match, so any two
-        // replicas agreeing on `match_id` already agree on the rest. Use the
-        // later `finished_ms` as a deterministic tiebreaker just in case.
-        if other.finished_ms > self.finished_ms {
-            *self = other.clone();
-        }
-        Ok(())
-    }
-}
+// MatchRecord is append-once / immutable per match — it's stored as
+// `FrozenValue<MatchRecord>` inside `history`, which supplies a no-op
+// `Mergeable` impl for free. No hand-rolled merge to own.
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -161,7 +155,7 @@ pub struct LobbyState {
     created_ms: LwwRegister<u64>,
     matches: UnorderedMap<String, MatchSummary>,
     player_stats: UnorderedMap<String, PlayerStats>,
-    history: Vector<MatchRecord>,
+    history: Vector<FrozenValue<MatchRecord>>,
 }
 
 #[app::logic]
@@ -302,7 +296,7 @@ impl LobbyState {
             .history
             .iter()
             .map_err(|e| AppError::msg(format!("history.iter: {e}")))?;
-        Ok(iter.collect())
+        Ok(iter.map(|f| f.0).collect())
     }
 
     pub fn on_match_finished(
@@ -341,12 +335,12 @@ impl LobbyState {
             .map_err(|e| GameError::Invalid(format!("matches.insert failed: {e}")))?;
 
         self.history
-            .push(MatchRecord {
+            .push(FrozenValue::from(MatchRecord {
                 match_id: match_id.to_string(),
                 winner: winner.to_string(),
                 loser: loser.to_string(),
                 finished_ms,
-            })
+            }))
             .map_err(|e| GameError::Invalid(format!("history.push failed: {e}")))?;
 
         bump_stats(&mut self.player_stats, winner, true)?;
@@ -570,12 +564,13 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // CRDT merge tests (review point 6).
+    // CRDT merge tests.
     //
-    // These exercise the hand-rolled `Mergeable` impls on `MatchSummary`
-    // and `MatchRecord` directly — the place the rank-clobber bug lived.
-    // Every hand-written merge is a correctness burden; these tests pin
-    // its current contract so future edits can't silently break it.
+    // These exercise the hand-rolled `Mergeable` impl on `MatchSummary` —
+    // the last remaining place we own the lattice-correctness proof
+    // ourselves. `MatchRecord` is now `FrozenValue<MatchRecord>` in the
+    // history vector, so its merge is an SDK-provided no-op (no tests
+    // needed — frozen values cannot disagree by construction).
     //
     // What we explicitly do NOT cover here (would need a multi-actor
     // test harness, not yet exposed by Calimero for unit tests):
@@ -681,38 +676,5 @@ mod tests {
             "self-wins under current impl"
         );
         // The two outcomes disagree → not commutative. Acknowledged.
-    }
-
-    #[test]
-    fn merge_match_record_keeps_later_finished_ms() {
-        let mut a = MatchRecord {
-            match_id: "m-1".into(),
-            winner: "p1".into(),
-            loser: "p2".into(),
-            finished_ms: 100,
-        };
-        let b = MatchRecord {
-            match_id: "m-1".into(),
-            winner: "p1".into(),
-            loser: "p2".into(),
-            finished_ms: 200,
-        };
-        a.merge(&b).unwrap();
-        assert_eq!(a.finished_ms, 200);
-    }
-
-    #[test]
-    fn merge_match_record_is_idempotent() {
-        let a_orig = MatchRecord {
-            match_id: "m-1".into(),
-            winner: "p1".into(),
-            loser: "p2".into(),
-            finished_ms: 150,
-        };
-        let mut a = a_orig.clone();
-        a.merge(&a_orig).unwrap();
-        assert_eq!(a.finished_ms, 150);
-        assert_eq!(a.winner, "p1");
-        assert_eq!(a.loser, "p2");
     }
 }
