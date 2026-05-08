@@ -138,11 +138,38 @@ jobs:
       - name: Run Battleships E2E Workflow
         id: run_e2e
         run: |
-          mkdir -p docker-logs
+          mkdir -p "$GITHUB_WORKSPACE/docker-logs"
           cd e2e
           max_attempts=2
           attempt=1
           success=false
+
+          # Stream container logs to disk live so they survive merobox's
+          # graceful-shutdown cleanup on failure (which removes the containers
+          # before any post-run `docker logs` call can read them).
+          start_log_streamer() {
+            local n=$1
+            ( docker events --filter type=container --filter event=start \
+                --format '{{.Actor.Attributes.name}}' \
+              | while read -r cname; do
+                  case "$cname" in calimero-node-*)
+                    docker logs -f "$cname" \
+                      > "$GITHUB_WORKSPACE/docker-logs/e2e-attempt${n}-${cname}.log" 2>&1 &
+                  ;; esac
+                done ) &
+            echo $! > "$GITHUB_WORKSPACE/docker-logs/.streamer-pid-${n}"
+          }
+          stop_log_streamer() {
+            local n=$1
+            local pidfile="$GITHUB_WORKSPACE/docker-logs/.streamer-pid-${n}"
+            if [ -f "$pidfile" ]; then
+              kill "$(cat "$pidfile")" 2>/dev/null || true
+              rm -f "$pidfile"
+            fi
+            # Give any in-flight `docker logs -f` children a beat to flush.
+            sleep 1
+            pkill -f "docker logs -f calimero-node-" 2>/dev/null || true
+          }
 
           while [ $attempt -le $max_attempts ]; do
               if [ $attempt -gt 1 ]; then
@@ -152,18 +179,16 @@ jobs:
                   sleep 2
               fi
 
+              start_log_streamer "$attempt"
+
               if merobox bootstrap run \
                   "workflow-battleships-e2e.yml" \
                   --e2e-mode; then
+                  stop_log_streamer "$attempt"
                   success=true
                   break
               else
-                  echo "Collecting Docker logs for attempt $attempt"
-                  for container in $(docker ps -a --format "{{.Names}}" 2>/dev/null || true); do
-                      if [ -n "$container" ]; then
-                          docker logs "$container" > "$GITHUB_WORKSPACE/docker-logs/e2e-attempt${attempt}-${container}.log" 2>&1 || true
-                      fi
-                  done
+                  stop_log_streamer "$attempt"
                   attempt=$((attempt + 1))
               fi
           done
