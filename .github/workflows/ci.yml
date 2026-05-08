@@ -211,14 +211,24 @@ jobs:
           # workflow; tracked upstream in merobox#207 / core#2179.
           LOGDIR="$GITHUB_WORKSPACE/docker-logs"
           WATCHER_STATE_DIR="$(mktemp -d)"
+          # The watcher reads the current attempt number from this file
+          # so a single watcher process can keep running across retries
+          # while still namespacing mark files and log paths per attempt.
+          # Without this, attempt 2's containers (same names as attempt 1
+          # after `merobox nuke --force` recreates them) would be skipped
+          # because the attempt-1 mark files survive the container wipe,
+          # and the attempt-1 log file would be clobbered if they weren't.
+          ATTEMPT_FILE="$WATCHER_STATE_DIR/.attempt"
+          echo 1 > "$ATTEMPT_FILE"
           (
               while [ ! -f "$WATCHER_STATE_DIR/stop" ]; do
+                  cur=$(cat "$ATTEMPT_FILE" 2>/dev/null || echo 1)
                   for c in $(docker ps --filter "label=calimero.node=true" --format "{{.Names}}" 2>/dev/null | grep -v -- '-init$' || true); do
-                      mark="$WATCHER_STATE_DIR/${c}"
+                      mark="$WATCHER_STATE_DIR/${c}-attempt${cur}"
                       if [ ! -f "$mark" ]; then
                           touch "$mark"
-                          echo "[log-watcher] following $c"
-                          docker logs -f "$c" > "$LOGDIR/e2e-${c}.log" 2>&1 &
+                          echo "[log-watcher] following $c (attempt $cur)"
+                          docker logs -f "$c" > "$LOGDIR/e2e-attempt${cur}-${c}.log" 2>&1 &
                       fi
                   done
                   sleep 1
@@ -233,6 +243,7 @@ jobs:
                   merobox nuke --force || true
                   sleep 2
               fi
+              echo $attempt > "$ATTEMPT_FILE"
 
               if merobox bootstrap run \
                   "workflow-battleships-e2e.yml" \
