@@ -214,11 +214,16 @@ steps:
     statements:
       - 'is_set({{matches_after_link_n2}})'
 
-  # Wait for subgroup membership + match context registration to propagate before node-2 joins
-  - name: Wait for Subgroup and Context Propagation
-    type: wait
-    seconds: 10
-    message: Waiting for subgroup membership and match context registration to propagate
+  # Wait for subgroup membership + match context registration to propagate before node-2 joins.
+  # Node 2 is already a member of match_subgroup_id by this point (via add_group_members),
+  # so wait_for_sync keyed on group_id can deterministically verify governance convergence.
+  - name: Wait for Subgroup Governance Sync
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    group_id: '{{match_subgroup_id}}'
+    timeout: 30
 
   - name: Node 2 Joins Match Context
     type: join_context

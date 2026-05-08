@@ -51,10 +51,17 @@ cat > res/bundle-temp/manifest.json <<EOF
 }
 EOF
 
-# Sign manifest
-cargo run --manifest-path ../../core/Cargo.toml -p mero-sign --quiet -- \
-    sign res/bundle-temp/manifest.json \
-    --key ../../core/scripts/test-signing-key/test-key.json
+# Sign manifest. The signer (`mero-sign`) lives in the sibling
+# `../../core` checkout; in CI no sibling core is present, so we
+# print a warning and fall through to producing an unsigned bundle.
+# `merobox install --dev` / `--e2e-mode` accepts unsigned bundles.
+if [ -f ../../core/Cargo.toml ]; then
+  cargo run --manifest-path ../../core/Cargo.toml -p mero-sign --quiet -- \
+      sign res/bundle-temp/manifest.json \
+      --key ../../core/scripts/test-signing-key/test-key.json
+else
+  echo "warning: ../../core not found — producing UNSIGNED bundle (ok for CI / merobox dev mode)"
+fi
 
 # Package .mpk
 cd res/bundle-temp
