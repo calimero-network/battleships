@@ -144,32 +144,32 @@ jobs:
           attempt=1
           success=false
 
-          # Stream container logs to disk live so they survive merobox's
-          # graceful-shutdown cleanup on failure (which removes the containers
-          # before any post-run `docker logs` call can read them).
-          start_log_streamer() {
-            local n=$1
-            ( docker events --filter type=container --filter event=start \
-                --format '{{.Actor.Attributes.name}}' \
-              | while read -r cname; do
-                  case "$cname" in calimero-node-*)
-                    docker logs -f "$cname" \
-                      > "$GITHUB_WORKSPACE/docker-logs/e2e-attempt${n}-${cname}.log" 2>&1 &
-                  ;; esac
-                done ) &
-            echo $! > "$GITHUB_WORKSPACE/docker-logs/.streamer-pid-${n}"
-          }
-          stop_log_streamer() {
-            local n=$1
-            local pidfile="$GITHUB_WORKSPACE/docker-logs/.streamer-pid-${n}"
-            if [ -f "$pidfile" ]; then
-              kill "$(cat "$pidfile")" 2>/dev/null || true
-              rm -f "$pidfile"
-            fi
-            # Give any in-flight `docker logs -f` children a beat to flush.
-            sleep 1
-            pkill -f "docker logs -f calimero-node-" 2>/dev/null || true
-          }
+          # Start a background watcher that streams `docker logs -f` from
+          # each merod node container to an artifact file as soon as it
+          # appears. A post-run `docker logs` loop does not work reliably on
+          # current merobox because the runtime containers are torn down as
+          # part of `merobox bootstrap run`'s exit path, leaving only the
+          # init-container names behind by the time the shell regains
+          # control. The watcher captures logs *while* containers are live,
+          # so post-run cleanup can't remove what we've already written to
+          # disk. Pattern lifted from calimero-network/core's e2e-rust-apps
+          # workflow; tracked upstream in merobox#207 / core#2179.
+          LOGDIR="$GITHUB_WORKSPACE/docker-logs"
+          WATCHER_STATE_DIR="$(mktemp -d)"
+          (
+              while [ ! -f "$WATCHER_STATE_DIR/stop" ]; do
+                  for c in $(docker ps --filter "label=calimero.node=true" --format "{{.Names}}" 2>/dev/null | grep -v -- '-init$' || true); do
+                      mark="$WATCHER_STATE_DIR/${c}"
+                      if [ ! -f "$mark" ]; then
+                          touch "$mark"
+                          echo "[log-watcher] following $c"
+                          docker logs -f "$c" > "$LOGDIR/e2e-${c}.log" 2>&1 &
+                      fi
+                  done
+                  sleep 1
+              done
+          ) &
+          WATCHER_PID=$!
 
           while [ $attempt -le $max_attempts ]; do
               if [ $attempt -gt 1 ]; then
@@ -179,19 +179,23 @@ jobs:
                   sleep 2
               fi
 
-              start_log_streamer "$attempt"
-
               if merobox bootstrap run \
                   "workflow-battleships-e2e.yml" \
                   --e2e-mode; then
-                  stop_log_streamer "$attempt"
                   success=true
                   break
               else
-                  stop_log_streamer "$attempt"
                   attempt=$((attempt + 1))
               fi
           done
+
+          # Signal the watcher to stop and give `docker logs -f` followers
+          # a moment to flush their final output.
+          touch "$WATCHER_STATE_DIR/stop"
+          sleep 2
+          kill "$WATCHER_PID" 2>/dev/null || true
+          for pid in $(jobs -p); do kill "$pid" 2>/dev/null || true; done
+          wait 2>/dev/null || true
 
           merobox stop --all || true
           merobox nuke --force || true
