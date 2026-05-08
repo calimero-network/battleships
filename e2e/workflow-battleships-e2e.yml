@@ -147,10 +147,13 @@ steps:
     statements:
       - 'is_set({{match_subgroup_id}})'
 
-  - name: Wait for Subgroup Governance Propagation
-    type: wait
-    seconds: 5
-    message: Waiting for subgroup governance to propagate to node 2
+  - name: Wait for Subgroup Governance Sync
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    group_id: '{{match_subgroup_id}}'
+    timeout: 30
 
   - name: Add Node 2 to Match Subgroup
     type: add_group_members
