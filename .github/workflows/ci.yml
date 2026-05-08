@@ -121,18 +121,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install merobox
+      - name: Install merobox (apt)
         run: |
-          # Floor is merobox 0.6.8 (wait_for_sync group_id support, contextStateHash rename).
-          # We install from git@master to pick up unreleased fixes (notably gossipsub
-          # delta-delivery hardening) that aren't yet in the PyPI 0.6.8 cut.
-          pip install "merobox @ git+https://github.com/calimero-network/merobox.git@master"
-          pip install --force-reinstall --no-deps "calimero-client-py @ git+https://github.com/calimero-network/calimero-client-py.git@master"
+          # Install from the official apt repo (https://calimero-network.github.io/merobox).
+          # This is a signed binary release that bundles calimero-client-py internally,
+          # so we don't have to coordinate pip versions for the two packages.
+          # Mirrors mero-drive's CI setup.
+          curl -fsSL https://calimero-network.github.io/merobox/gpg.key \
+            | sudo tee /usr/share/keyrings/merobox.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/merobox.gpg] https://calimero-network.github.io/merobox stable main" \
+            | sudo tee /etc/apt/sources.list.d/merobox.list
+          sudo apt-get update
+          sudo apt-get install -y merobox
           merobox --version
 
       - name: Run Battleships E2E Workflow
