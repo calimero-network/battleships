@@ -72,8 +72,10 @@ jobs:
         run: pnpm --dir app test
 
   # ============================================================
-  # Job 2: Logic — Rust Format, Clippy, WASM Build
+  # Job 2: Logic — Rust Format, Clippy
   # ============================================================
+  # Compile-clean check only — the actual artifact used by e2e is
+  # produced in the `bundle` job below, which builds + bundles + uploads.
   logic:
     name: Logic (Rust)
     runs-on: ubuntu-latest
@@ -94,7 +96,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             logic/target
-          key: logic-${{ runner.os }}-${{ hashFiles('logic/Cargo.toml') }}
+          key: logic-${{ runner.os }}-${{ hashFiles('logic/Cargo.toml', 'logic/crates/*/Cargo.toml') }}
           restore-keys: logic-${{ runner.os }}-
 
       - name: Cargo format
@@ -106,20 +108,73 @@ jobs:
         working-directory: logic
         run: cargo clippy --target wasm32-unknown-unknown -- -D warnings
 
-      - name: Build WASM
-        if: ${{ !cancelled() }}
+  # ============================================================
+  # Job 3: Bundle — build WASM against current core master and emit .mpk
+  # ============================================================
+  # Cargo.lock is gitignored, so each fresh checkout resolves the
+  # `branch = "master"` git deps for calimero-sdk / calimero-storage /
+  # calimero-storage-macros / calimero-wasm-abi to whatever is currently
+  # at master HEAD. That is exactly what we want: every PR's e2e run is
+  # exercised against the up-to-date runtime ABI.
+  #
+  # The committed `logic/res/battleships-0.3.0.mpk` is for local dev
+  # convenience — CI does not consume it. The artifact uploaded here
+  # is what the e2e job downloads and installs on the merod nodes.
+  #
+  # Signing is skipped in CI: the signer (`mero-sign`) lives in the
+  # sibling `../../core` checkout which we don't have here. The bundle
+  # is unsigned, which `merobox install --e2e-mode` accepts.
+  bundle:
+    name: Bundle (.mpk)
+    runs-on: ubuntu-latest
+    needs: [logic]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            logic/target
+          key: bundle-${{ runner.os }}-${{ hashFiles('logic/Cargo.toml', 'logic/crates/*/Cargo.toml') }}
+          restore-keys: bundle-${{ runner.os }}-
+
+      - name: Build bundle
         working-directory: logic
-        run: cargo build --target wasm32-unknown-unknown --profile app-release
+        run: ./build-bundle.sh
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: battleships-bundle-${{ github.sha }}
+          path: logic/res/battleships-*.mpk
+          retention-days: 7
+          if-no-files-found: error
 
   # ============================================================
-  # Job 3: E2E — Merobox Battleships Workflow
+  # Job 4: E2E — Merobox Battleships Workflow
   # ============================================================
   e2e:
     name: E2E (Merobox)
     runs-on: ubuntu-latest
+    needs: [bundle]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download freshly built bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: battleships-bundle-${{ github.sha }}
+          path: logic/res
 
       - name: Install merobox (apt)
         run: |
