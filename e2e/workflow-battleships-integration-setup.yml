@@ -11,6 +11,11 @@ description: >
 
 force_pull_image: true
 
+# Enable the Traefik auth-service proxy so the runner (and Chromium) can
+# reach the admin/RPC API at http://nodeN.127.0.0.1.nip.io and mint JWTs
+# via /auth/token. Without this the admin port is only docker-internal.
+auth_service: true
+
 nodes:
   count: 2
   image: ghcr.io/calimero-network/merod:edge

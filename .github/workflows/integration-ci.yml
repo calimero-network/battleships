@@ -112,8 +112,8 @@ jobs:
       - name: Bootstrap auth and write env file
         run: |
           set -euo pipefail
-          NODE_1_URL="http://localhost:2528"
-          NODE_2_URL="http://localhost:2529"
+          NODE_1_URL="http://node1.127.0.0.1.nip.io"
+          NODE_2_URL="http://node2.127.0.0.1.nip.io"
           ADMIN_USER="${E2E_ADMIN_USER:-admin}"
           ADMIN_PASS="${E2E_ADMIN_PASS:-calimero1234}"
 
