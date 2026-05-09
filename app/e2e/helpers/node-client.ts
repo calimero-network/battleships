@@ -69,11 +69,17 @@ export async function bypassCors(
         return;
       }
 
-      const headers = {
-        ...req.headers(),
-        authorization: `Bearer ${accessToken}`,
-      };
-      const response = await route.fetch({ headers });
+      // Strip browser-set headers that confuse Traefik's routing/CORS
+      // (Origin, Referer) and any auth-bearing headers we'll re-set ourselves.
+      const original = req.headers();
+      const filtered: Record<string, string> = {};
+      for (const [k, v] of Object.entries(original)) {
+        const lk = k.toLowerCase();
+        if (lk === 'origin' || lk === 'referer' || lk === 'authorization') continue;
+        filtered[k] = v;
+      }
+      filtered['authorization'] = `Bearer ${accessToken}`;
+      const response = await route.fetch({ headers: filtered });
       const respHeaders = {
         ...response.headers(),
         'access-control-allow-origin': allowOrigin,
