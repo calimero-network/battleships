@@ -214,21 +214,21 @@ jobs:
           echo "MEMBER_1:  $MEMBER_KEY_1"
           echo "MEMBER_2:  $MEMBER_KEY_2"
 
-          cat > app/.env.integration << ENVEOF
-E2E_APPLICATION_ID=${APP_ID}
-E2E_NAMESPACE_ID=${NS_ID}
-E2E_LOBBY_CONTEXT_ID=${CTX_ID}
-
-E2E_NODE_URL=${NODE_1_URL}
-E2E_ACCESS_TOKEN=${ACCESS_TOKEN_1}
-E2E_REFRESH_TOKEN=${REFRESH_TOKEN_1}
-E2E_MEMBER_KEY=${MEMBER_KEY_1}
-
-E2E_NODE_URL_2=${NODE_2_URL}
-E2E_ACCESS_TOKEN_2=${ACCESS_TOKEN_2}
-E2E_REFRESH_TOKEN_2=${REFRESH_TOKEN_2}
-E2E_MEMBER_KEY_2=${MEMBER_KEY_2}
-ENVEOF
+          printf '%s\n' \
+            "E2E_APPLICATION_ID=${APP_ID}" \
+            "E2E_NAMESPACE_ID=${NS_ID}" \
+            "E2E_LOBBY_CONTEXT_ID=${CTX_ID}" \
+            "" \
+            "E2E_NODE_URL=${NODE_1_URL}" \
+            "E2E_ACCESS_TOKEN=${ACCESS_TOKEN_1}" \
+            "E2E_REFRESH_TOKEN=${REFRESH_TOKEN_1}" \
+            "E2E_MEMBER_KEY=${MEMBER_KEY_1}" \
+            "" \
+            "E2E_NODE_URL_2=${NODE_2_URL}" \
+            "E2E_ACCESS_TOKEN_2=${ACCESS_TOKEN_2}" \
+            "E2E_REFRESH_TOKEN_2=${REFRESH_TOKEN_2}" \
+            "E2E_MEMBER_KEY_2=${MEMBER_KEY_2}" \
+            > app/.env.integration
           echo "app/.env.integration written"
 
       # Frontend setup
