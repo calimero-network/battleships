@@ -68,13 +68,10 @@ jobs:
 
       - name: Install merobox
         run: |
-          curl -fsSL https://calimero-network.github.io/merobox/gpg.key \
-            | sudo tee /usr/share/keyrings/merobox.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/merobox.gpg] https://calimero-network.github.io/merobox stable main" \
-            | sudo tee /etc/apt/sources.list.d/merobox.list
-          sudo apt-get update
-          sudo apt-get install -y merobox
-          merobox --version
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user "merobox==0.6.9"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/merobox" --version
 
       # Run setup workflow (stop_all_nodes: false leaves nodes alive)
       - name: Run Battleships Integration Setup
