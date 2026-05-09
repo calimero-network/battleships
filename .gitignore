@@ -126,3 +126,6 @@ app/.env.integration
 app/playwright-report/
 app/test-results/
 app/e2e/.auth/
+
+# Claude Code session state
+.claude/
