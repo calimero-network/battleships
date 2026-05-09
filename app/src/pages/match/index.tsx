@@ -763,7 +763,6 @@ export default function MatchPage() {
               lobbyContextId={lobby.lobbyContextId}
               namespaceId={lobby.namespaceId}
               lobbyJoined={lobby.lobbyJoined}
-              groupLoading={lobby.groupLoading}
               joinLoading={lobby.joinLoading}
               createLobbyLoading={lobby.createLobbyLoading}
               newLobbyName={newLobbyName}

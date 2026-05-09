@@ -15,7 +15,6 @@ interface LobbySelectProps {
   lobbyContextId: string | null;
   namespaceId: string | null;
   lobbyJoined: boolean;
-  groupLoading: boolean;
   joinLoading: boolean;
   createLobbyLoading: boolean;
   newLobbyName: string;
@@ -27,6 +26,12 @@ interface LobbySelectProps {
   onJoinLobby: () => void;
   onEnter: () => void;
 }
+
+// Stop "Securing channel…" from sticking forever if upstream context
+// resolution silently fails (no contexts under the namespace, peer
+// unreachable, etc.). After this window we drop the pending state so
+// the user can try again instead of needing a page refresh.
+const PENDING_ENTER_TIMEOUT_MS = 20_000;
 
 type AddTab = 'create' | 'join';
 type ViewMode = 'list' | 'cards';
@@ -52,18 +57,39 @@ export default function LobbySelect({
   // the resolved context to land before firing onEnter automatically.
   // No parent API change required.
   const [pendingEnterNs, setPendingEnterNs] = useState<string | null>(null);
+  const [pendingError, setPendingError] = useState<string | null>(null);
 
+  // Auto-fire onEnter once the upstream selection has resolved into
+  // a usable namespaceId + lobbyContextId for the row the user clicked.
   useEffect(() => {
     if (!pendingEnterNs) return;
     if (selectedNamespaceId !== pendingEnterNs) return;
     if (!namespaceId || !lobbyContextId) return;
     if (namespaceId !== pendingEnterNs) return;
     setPendingEnterNs(null);
+    setPendingError(null);
     onEnter();
   }, [pendingEnterNs, selectedNamespaceId, namespaceId, lobbyContextId, lobbyJoined, onEnter]);
 
+  // Timeout fallback: drop the pending state and surface an error
+  // banner if upstream resolution doesn't complete in time, so the
+  // user can retry instead of being locked out by a frozen "Securing
+  // channel…" row + globally-disabled Enter buttons.
+  useEffect(() => {
+    if (!pendingEnterNs) return;
+    const timer = setTimeout(() => {
+      setPendingEnterNs((current) => {
+        if (current !== pendingEnterNs) return current;
+        setPendingError("Couldn't open that lobby — its context didn't come online in time. Try again or pick another.");
+        return null;
+      });
+    }, PENDING_ENTER_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [pendingEnterNs]);
+
   const handleEnterRow = (nsId: string) => {
     if (pendingEnterNs) return;
+    setPendingError(null);
     setPendingEnterNs(nsId);
     onSelectLobby(nsId);
   };
@@ -226,6 +252,20 @@ export default function LobbySelect({
         </div>
 
         <div className="naval-card-body">
+          {pendingError && (
+            <div className="lobby-banner-error" role="alert">
+              <span className="lobby-banner-error-glyph" aria-hidden>!</span>
+              <span>{pendingError}</span>
+              <button
+                type="button"
+                className="lobby-banner-dismiss"
+                onClick={() => setPendingError(null)}
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
           {lobbiesLoading ? (
             <div className="lobby-empty">
               <div className="lobby-empty-radar"><span className="lobby-empty-radar-dot" /></div>
