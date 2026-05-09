@@ -181,9 +181,12 @@ jobs:
             sleep 2
           done
 
+          # No -f: 4xx/5xx must not abort the script under `set -e`. We
+          # validate the JSON shape after each call so a meaningful error
+          # bubbles up instead of a silent exit.
           mint_token() {
             local node_url=$1
-            curl -sf -X POST "${node_url}/auth/token" \
+            curl -sS -X POST "${node_url}/auth/token" \
               -H "Content-Type: application/json" \
               -d "{
                 \"auth_method\":  \"user_password\",
@@ -195,8 +198,12 @@ jobs:
               }"
           }
 
+          echo "--- mint token (node 1) ---"
           AUTH_1=$(mint_token "${NODE_1_URL}")
+          echo "$AUTH_1" | head -c 500; echo
+          echo "--- mint token (node 2) ---"
           AUTH_2=$(mint_token "${NODE_2_URL}")
+          echo "$AUTH_2" | head -c 500; echo
 
           ACCESS_TOKEN_1=$(echo "$AUTH_1" | jq -r '.data.access_token // empty')
           REFRESH_TOKEN_1=$(echo "$AUTH_1" | jq -r '.data.refresh_token // empty')
