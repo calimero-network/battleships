@@ -5,7 +5,7 @@
 
 import { test, expect } from '@playwright/test';
 import { envAvailable, getEnv } from './helpers/rpc-client';
-import { injectMeroAuth } from './helpers/node-client';
+import { bypassCors, injectMeroAuth } from './helpers/node-client';
 
 test.describe('Diagnostics', () => {
   test.skip(!envAvailable(), 'integration env not available');
@@ -19,6 +19,7 @@ test.describe('Diagnostics', () => {
       console.log(`[browser requestfailed] ${req.method()} ${req.url()} → ${req.failure()?.errorText}`);
     });
 
+    await bypassCors(page, env.node1.url);
     await injectMeroAuth(page, {
       nodeUrl: env.node1.url,
       accessToken: env.node1.accessToken,

@@ -7,12 +7,13 @@
 
 import { test, expect } from '@playwright/test';
 import { envAvailable, getEnv } from './helpers/rpc-client';
-import { injectMeroAuth } from './helpers/node-client';
+import { bypassCors, injectMeroAuth } from './helpers/node-client';
 
 test.describe('Lobby (integration)', () => {
   test.beforeEach(async ({ page }) => {
     if (!envAvailable()) test.skip();
     const env = getEnv();
+    await bypassCors(page, env.node1.url);
     await injectMeroAuth(page, {
       nodeUrl: env.node1.url,
       accessToken: env.node1.accessToken,
@@ -64,6 +65,7 @@ test.describe('Lobby Picker (integration)', () => {
   test.beforeEach(async ({ page }) => {
     if (!envAvailable()) test.skip();
     const env = getEnv();
+    await bypassCors(page, env.node1.url);
     await injectMeroAuth(page, {
       nodeUrl: env.node1.url,
       accessToken: env.node1.accessToken,

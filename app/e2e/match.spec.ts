@@ -9,7 +9,7 @@
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { envAvailable, getEnv, type NodeEnv } from './helpers/rpc-client';
-import { injectMeroAuth } from './helpers/node-client';
+import { bypassCors } from './helpers/node-client';
 
 const SHIP_PLACEMENTS_P1 = [
   { len: 2, x: 0, y: 0 },
@@ -75,6 +75,9 @@ test.describe('Match (full game playthrough)', () => {
 
     const p1Ctx = await browser.newContext();
     const p2Ctx = await browser.newContext();
+
+    await bypassCors(p1Ctx, env.node1.url, env.node2.url);
+    await bypassCors(p2Ctx, env.node1.url, env.node2.url);
 
     await seedAuth(p1Ctx, env.node1);
     await seedAuth(p2Ctx, env.node2);
