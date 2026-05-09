@@ -66,13 +66,14 @@ jobs:
         working-directory: logic
         run: ./build-bundle.sh
 
-      # Install merobox from the PR branch with the forward-auth CORS fix
-      # (calimero-network/merobox#229). Pinned until 0.6.9 ships to apt stable.
+      # Install merobox from master. The forward-auth CORS preflight fix
+      # (calimero-network/merobox#229) is on master but not yet in the apt
+      # stable channel; switch back to apt once a 0.6.9+ release ships.
       - name: Install merobox
         run: |
           python3 -m pip install --user --upgrade pip
           python3 -m pip install --user \
-            "git+https://github.com/calimero-network/merobox.git@fix/traefik-cors-preflight-228"
+            "git+https://github.com/calimero-network/merobox.git@master"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/merobox" --version
 
