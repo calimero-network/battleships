@@ -23,6 +23,28 @@ import ShotGrid from '../../components/ShotGrid';
 import PlacementGrid from '../../components/PlacementGrid';
 import ShipSelector from '../../components/ShipSelector';
 
+// Pure error-shape predicates — hoisted out of the component so they have a
+// stable identity and don't fight react-hooks/exhaustive-deps.
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+
+const isUninitializedError = (error: unknown): boolean =>
+  errorMessage(error).includes('Uninitialized');
+
+// merod returns one of two strings when a node touches a context whose state
+// hasn't been bootstrapped locally yet. Both recover via admin.joinContext.
+const isContextNotAvailableError = (error: unknown): boolean => {
+  const m = errorMessage(error).toLowerCase();
+  return m.includes('not available on this node') || m.includes('context not found');
+};
+
+// Fired when joinContext races ahead of the subgroup-membership delta on the
+// joiner's node. Transient — caller retries with backoff.
+const isNotMemberError = (error: unknown): boolean => {
+  const m = errorMessage(error).toLowerCase();
+  return m.includes('not a member of group') || m.includes('not a member');
+};
+
 export default function MatchPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,6 +118,14 @@ export default function MatchPage() {
   const effectiveMatchId = resolveEffectiveMatchId(matchId, runtimeMatchId);
   const [matchApiReady, setMatchApiReady] = useState(false);
 
+  // Match-join progress, surfaced in the UI as a loader card while the
+  // joiner side waits for subgroup membership / context state to converge.
+  // Mirrors merobox's `wait_for_sync` semantics in the UX: each phase only
+  // advances when the local node has actually observed the precondition.
+  type MatchJoinPhase = 'idle' | 'connecting' | 'joining' | 'syncing' | 'failed';
+  const [matchJoinPhase, setMatchJoinPhase] = useState<MatchJoinPhase>('idle');
+  const [matchJoinError, setMatchJoinError] = useState<string | null>(null);
+
   // Finish-state derived from the lobby match list. Needed because the on-chain
   // `MatchEnded` / `Winner` event can be dropped when its state-delta arrives
   // via periodic sync instead of gossipsub broadcast (see calimero core #2139),
@@ -110,11 +140,6 @@ export default function MatchPage() {
   // ---------------------------------------------------------------------------
 
   const sleep = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
-
-  const isUninitializedError = (error: unknown): boolean => {
-    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-    return message.includes('Uninitialized');
-  };
 
   const ensureMatchContextReady = useCallback(
     async (client: GameClient, attempts = 10, delayMs = 400): Promise<void> => {
@@ -331,47 +356,89 @@ export default function MatchPage() {
     if (!mero || !matchContextId || view !== 'game') {
       setMatchApi(null);
       setMatchApiReady(false);
+      setMatchJoinPhase('idle');
+      setMatchJoinError(null);
       return;
     }
     const executorKey = lobby.executorPublicKey ?? contextIdentity;
+    if (!executorKey) return;
+
     let cancelled = false;
     setMatchApiReady(false);
+    setMatchJoinError(null);
+    setMatchJoinPhase('connecting');
+
+    // Build the match GameClient, retrying through the two transient races
+    // the joiner-side hits when match deltas arrive in any order:
+    //
+    //   1. The match context-state hasn't been bootstrapped on this node yet
+    //      → createGameClient throws "context not available" → we explicitly
+    //        admin.joinContext() and retry.
+    //   2. The subgroup-membership delta hasn't been processed yet, so
+    //      joinContext throws "not a member of group" → retry with backoff
+    //        until the membership op converges.
+    //
+    // Each phase advances the visible loader so the user sees the same
+    // sync progression merobox enforces with `wait_for_sync` between steps.
+    const buildClient = () =>
+      createGameClient(mero, {
+        contextId: matchContextId,
+        contextIdentity: executorKey,
+        role: 'match' as ContextRole,
+      });
+
+    // Up to ~30s of joinContext retries (10 attempts: 200ms, 400ms, ... up
+    // to 3s, then 3s thereafter). Three full broadcast/heartbeat cycles is
+    // typically enough for the membership op to land even on a noisy mesh.
+    const joinContextWithBackoff = async (): Promise<void> => {
+      const attempts = 10;
+      for (let i = 0; i < attempts; i += 1) {
+        if (cancelled) return;
+        try {
+          await mero.admin.joinContext(matchContextId);
+          return;
+        } catch (joinErr) {
+          if (!isNotMemberError(joinErr) || i === attempts - 1) throw joinErr;
+          const delay = Math.min(3000, 200 * 2 ** i);
+          await sleep(delay);
+        }
+      }
+    };
 
     (async () => {
       try {
-        const { client } = await createGameClient(mero, {
-          contextId: matchContextId,
-          contextIdentity: executorKey,
-          role: 'match' as ContextRole,
-        });
-        await ensureMatchContextReady(client);
-        if (!cancelled) { setMatchApi(client); setMatchApiReady(true); }
-      } catch (e) {
-        const message = e instanceof Error ? e.message : '';
-        const missingContextLocally = message.includes('The requested context is not available on this node.');
-        if (missingContextLocally && lobby.groupId) {
-          try {
-            await mero.admin.joinContext(matchContextId);
-            const { client } = await createGameClient(mero, {
-              contextId: matchContextId,
-              contextIdentity: executorKey,
-              role: 'match' as ContextRole,
-            });
-            await ensureMatchContextReady(client);
-            if (!cancelled) { setMatchApi(client); setMatchApiReady(true); }
-            return;
-          } catch (joinErr) {
-            console.error('joinContext fallback failed:', joinErr);
-          }
-        } else {
-          console.error(e);
+        let client: GameClient;
+        try {
+          ({ client } = await buildClient());
+        } catch (firstErr) {
+          if (!isContextNotAvailableError(firstErr)) throw firstErr;
+          if (cancelled) return;
+          setMatchJoinPhase('joining');
+          await joinContextWithBackoff();
+          if (cancelled) return;
+          ({ client } = await buildClient());
         }
-        if (!cancelled) { setMatchApi(null); setMatchApiReady(false); show({ title: 'Failed to initialize match API client', variant: 'error' }); }
+
+        if (cancelled) return;
+        setMatchJoinPhase('syncing');
+        await ensureMatchContextReady(client);
+        if (cancelled) return;
+        setMatchApi(client);
+        setMatchApiReady(true);
+        setMatchJoinPhase('idle');
+      } catch (e) {
+        if (cancelled) return;
+        console.error('Match join failed:', e);
+        setMatchApi(null);
+        setMatchApiReady(false);
+        setMatchJoinError(errorMessage(e) || 'Failed to join match');
+        setMatchJoinPhase('failed');
+        show({ title: 'Failed to join match', variant: 'error' });
       }
     })();
 
     return () => { cancelled = true; };
-  }, [contextIdentity, lobby.executorPublicKey, lobby.groupId, matchContextId, mero, show, view, ensureMatchContextReady]);
+  }, [contextIdentity, lobby.executorPublicKey, matchContextId, mero, show, view, ensureMatchContextReady]);
 
   // Fetch runtime match ID
   useEffect(() => {
@@ -752,8 +819,36 @@ export default function MatchPage() {
             </div>
           </div>
 
+          {/* Match-join progress: surfaced while the joiner side waits for
+               subgroup membership and match-context state to converge.
+               Mirrors merobox's wait_for_sync pacing in the UI so the user
+               sees deterministic progress instead of a permanently disabled
+               Deploy Fleet button. */}
+          {!matchApiReady && matchJoinPhase !== 'idle' && (
+            <div className="naval-card fade-in fade-in-delay-1">
+              <div className="naval-card-header">
+                <div className="naval-card-title">
+                  {matchJoinPhase === 'failed' ? 'Could not join match' : 'Joining match…'}
+                </div>
+              </div>
+              <div className="naval-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <span className="mono-sm">
+                  {matchJoinPhase === 'connecting' && 'Connecting to match context on this node…'}
+                  {matchJoinPhase === 'joining' && 'Waiting for match group membership to propagate…'}
+                  {matchJoinPhase === 'syncing' && 'Synchronizing match state with peers…'}
+                  {matchJoinPhase === 'failed' && (matchJoinError ?? 'Unknown error.')}
+                </span>
+                {matchJoinPhase === 'failed' && (
+                  <span className="mono-sm" style={{ opacity: 0.8 }}>
+                    The other player may not have shared this match yet. Try again in a moment.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Ship placement */}
-          {!placed && (
+          {!placed && matchApiReady && (
             <div className="naval-card fade-in fade-in-delay-1">
               <div className="naval-card-header">
                 <div className="naval-card-title">Deploy Fleet</div>
