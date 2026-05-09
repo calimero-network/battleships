@@ -66,9 +66,6 @@ jobs:
         working-directory: logic
         run: ./build-bundle.sh
 
-      # Install merobox from master. The forward-auth CORS preflight fix
-      # (calimero-network/merobox#229) is on master but not yet in the apt
-      # stable channel; switch back to apt once a 0.6.9+ release ships.
       - name: Install merobox
         run: |
           python3 -m pip install --user --upgrade pip
