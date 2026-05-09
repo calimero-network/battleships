@@ -112,6 +112,18 @@ test.describe('Match (full game playthrough)', () => {
       await expect(p1.getByText('Victory')).toBeVisible();
       await expect(p2.getByText('Match over.')).toBeVisible({ timeout: 60_000 });
       await expect(p2.getByText('Defeat')).toBeVisible();
+
+      // Post-match state on both pages: navigate back via the in-game button
+      // (user-realistic), then assert that the lobby's Your Record card and
+      // Match History card reflect the just-completed match. Generous timeouts
+      // because the loser's node has to receive the match-finished delta.
+      await p1.getByRole('button', { name: 'Back to Lobby' }).click();
+      await p2.getByRole('button', { name: 'Back to Lobby' }).click();
+
+      await expectPostMatchRecord(p1, 'winner');
+      await expectPostMatchRecord(p2, 'loser');
+      await expectPostMatchHistory(p1, 'winner');
+      await expectPostMatchHistory(p2, 'loser');
     } finally {
       await p1Ctx.close();
       await p2Ctx.close();
@@ -205,4 +217,29 @@ async function fireShot(page: Page, x: number, y: number): Promise<void> {
 
   // Pending → resolved (hit or miss) within sync timeout.
   await expect(cell).toHaveClass(/cell-(hit|miss)/, { timeout: 30_000 });
+}
+
+async function expectPostMatchRecord(page: Page, role: 'winner' | 'loser'): Promise<void> {
+  const card = page.locator('.naval-card', {
+    has: page.locator('.naval-card-title', { hasText: 'Your Record' }),
+  });
+  await expect(card).toBeVisible({ timeout: 60_000 });
+  const wins = role === 'winner' ? '1' : '0';
+  const losses = role === 'winner' ? '0' : '1';
+  await expect(card.locator('.info-pair', { hasText: 'Wins' }).locator('.info-value'))
+    .toHaveText(wins, { timeout: 60_000 });
+  await expect(card.locator('.info-pair', { hasText: 'Losses' }).locator('.info-value'))
+    .toHaveText(losses);
+  await expect(card.locator('.info-pair', { hasText: 'Games' }).locator('.info-value'))
+    .toHaveText('1');
+}
+
+async function expectPostMatchHistory(page: Page, role: 'winner' | 'loser'): Promise<void> {
+  const card = page.locator('.naval-card', {
+    has: page.locator('.naval-card-title', { hasText: 'Match History' }),
+  });
+  await expect(card).toBeVisible({ timeout: 60_000 });
+  await expect(card.locator('.match-item').first()).toBeVisible({ timeout: 60_000 });
+  const expectedLabel = role === 'winner' ? 'You won' : 'You lost';
+  await expect(card.locator('.match-item').first().getByText(expectedLabel)).toBeVisible();
 }
