@@ -66,16 +66,15 @@ jobs:
         working-directory: logic
         run: ./build-bundle.sh
 
-      # Install merobox (signed apt release)
+      # Install merobox from the PR branch with the forward-auth CORS fix
+      # (calimero-network/merobox#229). Pinned until 0.6.9 ships to apt stable.
       - name: Install merobox
         run: |
-          curl -fsSL https://calimero-network.github.io/merobox/gpg.key \
-            | sudo tee /usr/share/keyrings/merobox.gpg > /dev/null
-          echo "deb [signed-by=/usr/share/keyrings/merobox.gpg] https://calimero-network.github.io/merobox stable main" \
-            | sudo tee /etc/apt/sources.list.d/merobox.list
-          sudo apt-get update
-          sudo apt-get install -y merobox
-          merobox --version
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user \
+            "git+https://github.com/calimero-network/merobox.git@fix/traefik-cors-preflight-228"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/merobox" --version
 
       # Run setup workflow (stop_all_nodes: false leaves nodes alive)
       - name: Run Battleships Integration Setup
@@ -152,36 +151,62 @@ jobs:
             exit 1
           fi
 
-      # Mint JWTs and discover IDs
+      # Mint JWTs and discover IDs (auth_service: true → Bearer required)
       - name: Bootstrap auth and write env file
         run: |
           set -euo pipefail
-          NODE_1_URL="http://localhost:2528"
-          NODE_2_URL="http://localhost:2529"
+          NODE_1_URL="http://node1.127.0.0.1.nip.io"
+          NODE_2_URL="http://node2.127.0.0.1.nip.io"
+          ADMIN_USER="${E2E_ADMIN_USER:-admin}"
+          ADMIN_PASS="${E2E_ADMIN_PASS:-calimero1234}"
 
-          # Without auth_service, merod admin API is unauthenticated and
-          # CORS-wildcard. Probe /admin-api/contexts directly: any 2xx
-          # confirms the node is up and the API is responding.
-          echo "Waiting for both merod admin APIs to come up..."
-          for i in $(seq 1 30); do
-            CODE_1=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_1_URL}/admin-api/contexts" || echo "000")
-            CODE_2=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_2_URL}/admin-api/contexts" || echo "000")
+          echo "Waiting for the auth proxy + both nodes to come up..."
+          for i in $(seq 1 60); do
+            CODE_1=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_1_URL}/auth/login" || echo "000")
+            CODE_2=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_2_URL}/auth/login" || echo "000")
             if [ "${CODE_1:0:1}" = "2" ] && [ "${CODE_2:0:1}" = "2" ]; then
-              echo "Both nodes responding (attempt ${i})  node1=${CODE_1} node2=${CODE_2}"
+              echo "Auth proxy ready (attempt ${i})  node1=${CODE_1} node2=${CODE_2}"
               break
             fi
-            if [ "$i" -eq 30 ]; then
-              echo "Nodes not responding after 60s  node1=${CODE_1} node2=${CODE_2}"
+            if [ "$i" -eq 60 ]; then
+              echo "Auth proxy not ready after 120s  node1=${CODE_1} node2=${CODE_2}"
               exit 1
             fi
             sleep 2
           done
 
+          mint_token() {
+            local node_url=$1
+            curl -sS -X POST "${node_url}/auth/token" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"auth_method\":   \"user_password\",
+                \"public_key\":    \"${ADMIN_USER}\",
+                \"client_name\":   \"battleships-integration-ci\",
+                \"timestamp\":     0,
+                \"permissions\":   [],
+                \"provider_data\": {\"username\": \"${ADMIN_USER}\", \"password\": \"${ADMIN_PASS}\"}
+              }"
+          }
+
+          AUTH_1=$(mint_token "${NODE_1_URL}")
+          AUTH_2=$(mint_token "${NODE_2_URL}")
+
+          ACCESS_TOKEN_1=$(echo "$AUTH_1" | jq -r '.data.access_token // empty')
+          REFRESH_TOKEN_1=$(echo "$AUTH_1" | jq -r '.data.refresh_token // empty')
+          ACCESS_TOKEN_2=$(echo "$AUTH_2" | jq -r '.data.access_token // empty')
+          REFRESH_TOKEN_2=$(echo "$AUTH_2" | jq -r '.data.refresh_token // empty')
+
+          [ -n "$ACCESS_TOKEN_1" ] || { echo "Node 1 auth failed: $AUTH_1"; exit 1; }
+          [ -n "$ACCESS_TOKEN_2" ] || { echo "Node 2 auth failed: $AUTH_2"; exit 1; }
+
           probe_admin() {
             local node_url=$1
             local path=$2
+            local token=$3
             local body
             body=$(curl -sS -o /tmp/probe.body -w "%{http_code}" \
+              -H "Authorization: Bearer ${token}" \
               "${node_url}${path}")
             echo "GET ${node_url}${path} → HTTP ${body}" >&2
             head -c 400 /tmp/probe.body >&2; echo >&2
@@ -189,34 +214,27 @@ jobs:
           }
 
           echo "--- discover application ---"
-          APPS=$(probe_admin "${NODE_1_URL}" "/admin-api/applications")
+          APPS=$(probe_admin "${NODE_1_URL}" "/admin-api/applications" "${ACCESS_TOKEN_1}")
           APP_ID=$(echo "$APPS" | jq -r '.data.apps[0].id // empty')
 
           echo "--- discover namespace ---"
-          NS_RESP=$(probe_admin "${NODE_1_URL}" "/admin-api/namespaces")
+          NS_RESP=$(probe_admin "${NODE_1_URL}" "/admin-api/namespaces" "${ACCESS_TOKEN_1}")
           NS_ID=$(echo "$NS_RESP" | jq -r '.data[0].namespaceId // empty')
 
           echo "--- discover lobby context ---"
-          CTXS=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts")
+          CTXS=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts" "${ACCESS_TOKEN_1}")
           CTX_ID=$(echo "$CTXS" | jq -r '.data.contexts[0].id // empty')
 
           MEMBER_KEY_1=""
           MEMBER_KEY_2=""
           if [ -n "$CTX_ID" ]; then
             echo "--- discover member keys ---"
-            IDS_1=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned")
+            IDS_1=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_1}")
             MEMBER_KEY_1=$(echo "$IDS_1" | jq -r '.data.identities[0] // empty')
 
-            IDS_2=$(probe_admin "${NODE_2_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned")
+            IDS_2=$(probe_admin "${NODE_2_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_2}")
             MEMBER_KEY_2=$(echo "$IDS_2" | jq -r '.data.identities[0] // empty')
           fi
-
-          # Tokens are not required when auth_service is off — keep the
-          # vars empty; tests just won't write a Bearer header.
-          ACCESS_TOKEN_1=""
-          REFRESH_TOKEN_1=""
-          ACCESS_TOKEN_2=""
-          REFRESH_TOKEN_2=""
 
           [ -n "$APP_ID" ]       || { echo "Failed to discover application id"; exit 1; }
           [ -n "$NS_ID" ]        || { echo "Failed to discover namespace id";   exit 1; }

@@ -19,15 +19,17 @@ export interface NodeEnv {
   memberKey: string;
 }
 
-// Tokens are optional: when merobox runs without auth_service, the merod
-// admin API is unauthenticated and tests don't need a Bearer header.
 const REQUIRED_KEYS = [
   'E2E_APPLICATION_ID',
   'E2E_NAMESPACE_ID',
   'E2E_LOBBY_CONTEXT_ID',
   'E2E_NODE_URL',
+  'E2E_ACCESS_TOKEN',
+  'E2E_REFRESH_TOKEN',
   'E2E_MEMBER_KEY',
   'E2E_NODE_URL_2',
+  'E2E_ACCESS_TOKEN_2',
+  'E2E_REFRESH_TOKEN_2',
   'E2E_MEMBER_KEY_2',
 ] as const;
 
@@ -47,14 +49,14 @@ export function getEnv(): IntegrationEnv {
     lobbyContextId: process.env.E2E_LOBBY_CONTEXT_ID!,
     node1: {
       url: process.env.E2E_NODE_URL!,
-      accessToken: process.env.E2E_ACCESS_TOKEN ?? '',
-      refreshToken: process.env.E2E_REFRESH_TOKEN ?? '',
+      accessToken: process.env.E2E_ACCESS_TOKEN!,
+      refreshToken: process.env.E2E_REFRESH_TOKEN!,
       memberKey: process.env.E2E_MEMBER_KEY!,
     },
     node2: {
       url: process.env.E2E_NODE_URL_2!,
-      accessToken: process.env.E2E_ACCESS_TOKEN_2 ?? '',
-      refreshToken: process.env.E2E_REFRESH_TOKEN_2 ?? '',
+      accessToken: process.env.E2E_ACCESS_TOKEN_2!,
+      refreshToken: process.env.E2E_REFRESH_TOKEN_2!,
       memberKey: process.env.E2E_MEMBER_KEY_2!,
     },
   };

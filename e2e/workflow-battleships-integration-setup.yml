@@ -11,12 +11,12 @@ description: >
 
 force_pull_image: true
 
-# auth_service intentionally OFF: with the Traefik auth-service stack
-# enabled, /admin-api goes through forward-auth middleware whose OPTIONS
-# preflight handling kills cross-origin browser fetches. Without it,
-# merod's admin API is reachable directly on localhost:2528/2529 with
-# wildcard CORS and no JWT required, which is what the Playwright tests
-# need.
+# Auth-service ON: nodes are reached at http://nodeN.127.0.0.1.nip.io
+# through Traefik. Browsers from a different origin (Vite at :5173)
+# need merobox >=0.6.9 so that OPTIONS preflights bypass forward-auth
+# (calimero-network/merobox#228).
+
+auth_service: true
 
 nodes:
   count: 2
