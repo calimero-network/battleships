@@ -13,7 +13,7 @@ interface PlacementGridProps {
  */
 export default function PlacementGrid({ size, grid, onCellClick }: PlacementGridProps) {
   return (
-    <div className="board-container">
+    <div className="board-container placement-grid">
       <div className="board-label">Place Your Fleet</div>
       <div className="board-grid-wrapper">
         <div className="coord-row">
@@ -27,6 +27,8 @@ export default function PlacementGrid({ size, grid, onCellClick }: PlacementGrid
             {Array.from({ length: size }, (_, x) => (
               <div
                 key={`${x}-${y}`}
+                data-x={x}
+                data-y={y}
                 className={`cell cell-editable ${grid[y][x] ? 'cell-ship' : 'cell-empty'}`}
                 onClick={() => onCellClick(x, y)}
               />

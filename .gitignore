@@ -120,3 +120,9 @@ e2e/data/
 logic/data/
 
 .worktrees/
+
+# Playwright
+app/.env.integration
+app/playwright-report/
+app/test-results/
+app/e2e/.auth/
