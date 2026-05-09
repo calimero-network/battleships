@@ -213,24 +213,39 @@ jobs:
           [ -n "$ACCESS_TOKEN_1" ] || { echo "Node 1 auth failed: $AUTH_1"; exit 1; }
           [ -n "$ACCESS_TOKEN_2" ] || { echo "Node 2 auth failed: $AUTH_2"; exit 1; }
 
-          APPS=$(curl -sf "${NODE_1_URL}/admin-api/applications" \
-            -H "Authorization: Bearer ${ACCESS_TOKEN_1}")
+          probe_admin() {
+            local node_url=$1
+            local path=$2
+            local token=$3
+            local code
+            local body
+            body=$(curl -sS -o /tmp/probe.body -w "%{http_code}" \
+              -H "Authorization: Bearer ${token}" \
+              "${node_url}${path}")
+            code=$body
+            echo "GET ${node_url}${path} → HTTP ${code}" >&2
+            head -c 400 /tmp/probe.body >&2; echo >&2
+            cat /tmp/probe.body
+          }
+
+          echo "--- discover application ---"
+          APPS=$(probe_admin "${NODE_1_URL}" "/admin-api/applications" "${ACCESS_TOKEN_1}")
           APP_ID=$(echo "$APPS" | jq -r '
             (.data // .) |
             if type == "array" then .[0].applicationId // .[0].id
             elif type == "object" then (.applications[0].applicationId // .items[0].applicationId)
             else empty end' 2>/dev/null || echo "")
 
-          GROUPS=$(curl -sf "${NODE_1_URL}/admin-api/groups" \
-            -H "Authorization: Bearer ${ACCESS_TOKEN_1}")
+          echo "--- discover groups ---"
+          GROUPS=$(probe_admin "${NODE_1_URL}" "/admin-api/groups" "${ACCESS_TOKEN_1}")
           NS_ID=$(echo "$GROUPS" | jq -r '
             (.data // .) |
             if type == "array" then .[0].groupId
             elif type == "object" then (.groups[0].groupId // .items[0].groupId)
             else empty end' 2>/dev/null || echo "")
 
-          CTXS=$(curl -sf "${NODE_1_URL}/admin-api/contexts" \
-            -H "Authorization: Bearer ${ACCESS_TOKEN_1}")
+          echo "--- discover contexts ---"
+          CTXS=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts" "${ACCESS_TOKEN_1}")
           CTX_ID=$(echo "$CTXS" | jq -r '
             (.data // .) |
             if type == "array" then .[0].id // .[0].contextId
@@ -240,18 +255,15 @@ jobs:
           MEMBER_KEY_1=""
           MEMBER_KEY_2=""
           if [ -n "$CTX_ID" ]; then
-            IDS_1=$(curl -sf \
-              "${NODE_1_URL}/admin-api/contexts/${CTX_ID}/identities-owned" \
-              -H "Authorization: Bearer ${ACCESS_TOKEN_1}")
+            echo "--- discover member keys ---"
+            IDS_1=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_1}")
             MEMBER_KEY_1=$(echo "$IDS_1" | jq -r '
               (.data // .) |
               if type == "array" then .[0]
               elif type == "object" then (.identities[0] // .items[0])
               else empty end' 2>/dev/null || echo "")
 
-            IDS_2=$(curl -sf \
-              "${NODE_2_URL}/admin-api/contexts/${CTX_ID}/identities-owned" \
-              -H "Authorization: Bearer ${ACCESS_TOKEN_2}")
+            IDS_2=$(probe_admin "${NODE_2_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_2}")
             MEMBER_KEY_2=$(echo "$IDS_2" | jq -r '
               (.data // .) |
               if type == "array" then .[0]
