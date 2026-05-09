@@ -161,24 +161,21 @@ jobs:
           ADMIN_USER="${E2E_ADMIN_USER:-admin}"
           ADMIN_PASS="${E2E_ADMIN_PASS:-calimero1234}"
 
-          echo "--- DNS / endpoint smoke ---"
-          getent hosts node1.127.0.0.1.nip.io || echo "(getent: not found)"
-          curl -sS -o /tmp/probe.out -w "GET ${NODE_1_URL}/ → HTTP %{http_code}\n" "${NODE_1_URL}/" || true
-          curl -sS -o /tmp/probe.out -w "GET ${NODE_1_URL}/admin-api/health → HTTP %{http_code}\n" "${NODE_1_URL}/admin-api/health" || true
-          curl -sS -o /tmp/probe.out -w "GET http://localhost:80/ → HTTP %{http_code}\n" "http://localhost:80/" || true
-          curl -sS -o /tmp/probe.out -w "GET localhost:80 (Host: node1.…nip.io) → HTTP %{http_code}\n" -H "Host: node1.127.0.0.1.nip.io" "http://localhost:80/admin-api/health" || true
-          echo "--- /etc/hosts excerpt ---"
-          grep -E "(127\.0\.0\.1|node[12])" /etc/hosts || true
-
-          echo "Waiting for both nodes to be healthy..."
+          # /admin-api/health requires a valid JWT, so we can't use it as a
+          # readiness probe. /auth/login is served by the auth-service and
+          # responds 200 unauthenticated as soon as the proxy + auth stack
+          # are up; both nodes share the proxy, so probing one URL per node
+          # confirms Traefik is routing host-headers correctly.
+          echo "Waiting for auth-service to accept requests on both nodes..."
           for i in $(seq 1 30); do
-            if curl -sf "${NODE_1_URL}/admin-api/health" >/dev/null 2>&1 && \
-               curl -sf "${NODE_2_URL}/admin-api/health" >/dev/null 2>&1; then
-              echo "Both nodes healthy (attempt ${i})"
+            CODE_1=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_1_URL}/auth/login" || echo "000")
+            CODE_2=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_2_URL}/auth/login" || echo "000")
+            if [ "${CODE_1:0:1}" = "2" ] && [ "${CODE_2:0:1}" = "2" ]; then
+              echo "Both nodes routable (attempt ${i})  node1=${CODE_1} node2=${CODE_2}"
               break
             fi
             if [ "$i" -eq 30 ]; then
-              echo "Nodes not healthy after 60s"
+              echo "Nodes not routable after 60s  node1=${CODE_1} node2=${CODE_2}"
               exit 1
             fi
             sleep 2
