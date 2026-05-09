@@ -353,15 +353,18 @@ export default function MatchPage() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!mero || !matchContextId || view !== 'game') {
+    const executorKey = lobby.executorPublicKey ?? contextIdentity;
+    // Reset all join state on any precondition miss — including a missing
+    // executor identity. Without resetting, a previous run that set
+    // matchJoinPhase = 'connecting' could leave the loader card visible
+    // forever if a dep change drops executorKey before the join completes.
+    if (!mero || !matchContextId || view !== 'game' || !executorKey) {
       setMatchApi(null);
       setMatchApiReady(false);
       setMatchJoinPhase('idle');
       setMatchJoinError(null);
       return;
     }
-    const executorKey = lobby.executorPublicKey ?? contextIdentity;
-    if (!executorKey) return;
 
     let cancelled = false;
     setMatchApiReady(false);
