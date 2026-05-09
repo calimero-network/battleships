@@ -43,11 +43,12 @@ export default defineConfig({
     },
     {
       name: 'integration',
-      testMatch: ['**/lobby.spec.ts', '**/match.spec.ts'],
+      testMatch: ['**/diagnostics.spec.ts', '**/lobby.spec.ts', '**/match.spec.ts'],
       timeout: 300_000,
       use: {
         ...devices['Desktop Chrome'],
         storageState: { cookies: [], origins: [] },
+        trace: 'on',
       },
     },
   ],
