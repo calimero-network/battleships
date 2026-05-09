@@ -14,7 +14,6 @@ interface LobbySelectProps {
   selectedNamespaceId: string | null;
   lobbyContextId: string | null;
   namespaceId: string | null;
-  lobbyJoined: boolean;
   joinLoading: boolean;
   createLobbyLoading: boolean;
   newLobbyName: string;
@@ -42,7 +41,7 @@ const LOBBY_INFO_TOOLTIP =
 
 export default function LobbySelect({
   lobbies, lobbiesLoading, selectedNamespaceId,
-  lobbyContextId, namespaceId, lobbyJoined,
+  lobbyContextId, namespaceId,
   joinLoading, createLobbyLoading,
   newLobbyName, joinInvitationInput,
   onNewLobbyNameChange, onJoinInputChange,
@@ -69,7 +68,7 @@ export default function LobbySelect({
     setPendingEnterNs(null);
     setPendingError(null);
     onEnter();
-  }, [pendingEnterNs, selectedNamespaceId, namespaceId, lobbyContextId, lobbyJoined, onEnter]);
+  }, [pendingEnterNs, selectedNamespaceId, namespaceId, lobbyContextId, onEnter]);
 
   // Timeout fallback: drop the pending state and surface an error
   // banner if upstream resolution doesn't complete in time, so the

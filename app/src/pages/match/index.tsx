@@ -762,7 +762,6 @@ export default function MatchPage() {
               selectedNamespaceId={lobby.selectedLobby?.namespaceId || null}
               lobbyContextId={lobby.lobbyContextId}
               namespaceId={lobby.namespaceId}
-              lobbyJoined={lobby.lobbyJoined}
               joinLoading={lobby.joinLoading}
               createLobbyLoading={lobby.createLobbyLoading}
               newLobbyName={newLobbyName}
