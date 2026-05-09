@@ -230,45 +230,25 @@ jobs:
 
           echo "--- discover application ---"
           APPS=$(probe_admin "${NODE_1_URL}" "/admin-api/applications" "${ACCESS_TOKEN_1}")
-          APP_ID=$(echo "$APPS" | jq -r '
-            (.data // .) |
-            if type == "array" then .[0].applicationId // .[0].id
-            elif type == "object" then (.applications[0].applicationId // .items[0].applicationId)
-            else empty end' 2>/dev/null || echo "")
+          APP_ID=$(echo "$APPS" | jq -r '.data.apps[0].id // empty')
 
-          echo "--- discover groups ---"
-          GROUPS=$(probe_admin "${NODE_1_URL}" "/admin-api/groups" "${ACCESS_TOKEN_1}")
-          NS_ID=$(echo "$GROUPS" | jq -r '
-            (.data // .) |
-            if type == "array" then .[0].groupId
-            elif type == "object" then (.groups[0].groupId // .items[0].groupId)
-            else empty end' 2>/dev/null || echo "")
+          echo "--- discover namespace ---"
+          NS_RESP=$(probe_admin "${NODE_1_URL}" "/admin-api/namespaces" "${ACCESS_TOKEN_1}")
+          NS_ID=$(echo "$NS_RESP" | jq -r '.data[0].namespaceId // empty')
 
-          echo "--- discover contexts ---"
+          echo "--- discover lobby context ---"
           CTXS=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts" "${ACCESS_TOKEN_1}")
-          CTX_ID=$(echo "$CTXS" | jq -r '
-            (.data // .) |
-            if type == "array" then .[0].id // .[0].contextId
-            elif type == "object" then (.contexts[0].id // .contexts[0].contextId)
-            else empty end' 2>/dev/null || echo "")
+          CTX_ID=$(echo "$CTXS" | jq -r '.data.contexts[0].id // empty')
 
           MEMBER_KEY_1=""
           MEMBER_KEY_2=""
           if [ -n "$CTX_ID" ]; then
             echo "--- discover member keys ---"
             IDS_1=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_1}")
-            MEMBER_KEY_1=$(echo "$IDS_1" | jq -r '
-              (.data // .) |
-              if type == "array" then .[0]
-              elif type == "object" then (.identities[0] // .items[0])
-              else empty end' 2>/dev/null || echo "")
+            MEMBER_KEY_1=$(echo "$IDS_1" | jq -r '.data.identities[0] // empty')
 
             IDS_2=$(probe_admin "${NODE_2_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_2}")
-            MEMBER_KEY_2=$(echo "$IDS_2" | jq -r '
-              (.data // .) |
-              if type == "array" then .[0]
-              elif type == "object" then (.identities[0] // .items[0])
-              else empty end' 2>/dev/null || echo "")
+            MEMBER_KEY_2=$(echo "$IDS_2" | jq -r '.data.identities[0] // empty')
           fi
 
           [ -n "$APP_ID" ]       || { echo "Failed to discover application id"; exit 1; }
