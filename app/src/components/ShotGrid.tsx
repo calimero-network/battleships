@@ -31,7 +31,7 @@ export default function ShotGrid({
   };
 
   return (
-    <div className="board-container">
+    <div className="board-container shot-grid">
       <div className="board-label">
         Shots Fired
         {isMyTurn && (
@@ -62,6 +62,8 @@ export default function ShotGrid({
               return (
                 <div
                   key={`${x}-${y}`}
+                  data-x={x}
+                  data-y={y}
                   className={cellClass(val, x, y)}
                   onClick={() => clickable && onCellClick(x, y)}
                 />

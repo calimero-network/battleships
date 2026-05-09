@@ -17,6 +17,7 @@
   "devDependencies": {
     "@calimero-network/abi-codegen": "^1.0.2",
     "@eslint/js": "^9.4.0",
+    "@playwright/test": "^1.52.0",
     "@types/eslint__js": "^8.42.3",
     "@types/node": "^16.18.98",
     "@types/react": "^19.0.0",
@@ -53,12 +54,18 @@
     "predeploy": "pnpm run build",
     "deploy": "gh-pages -d build",
     "prettier": "exec prettier . --write",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e:landing": "playwright test --project=landing",
+    "e2e:integration": "playwright test --project=integration",
+    "e2e:report": "playwright show-report playwright-report"
   },
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
+    ],
+    "ignorePatterns": [
+      "e2e/**"
     ]
   },
   "browserslist": {

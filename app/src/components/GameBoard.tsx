@@ -29,7 +29,7 @@ export default function GameBoard({ size, board, label, pendingShot }: GameBoard
   };
 
   return (
-    <div className="board-container">
+    <div className="board-container game-board">
       <div className="board-label">{label}</div>
       <div className="board-grid-wrapper">
         <div className="coord-row">
@@ -42,7 +42,7 @@ export default function GameBoard({ size, board, label, pendingShot }: GameBoard
             <div className="row-label">{y + 1}</div>
             {Array.from({ length: size }, (_, x) => {
               const val = board[y * size + x] || 0;
-              return <div key={`${x}-${y}`} className={cellClass(val, x, y)} />;
+              return <div key={`${x}-${y}`} data-x={x} data-y={y} className={cellClass(val, x, y)} />;
             })}
           </div>
         ))}

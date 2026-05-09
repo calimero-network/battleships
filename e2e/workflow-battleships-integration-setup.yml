@@ -1,0 +1,100 @@
+name: Battleships Integration Setup — Namespace + Lobby + Two Members
+description: >
+  Slim merobox setup for Playwright integration tests.
+  Brings up two nodes, installs the battleships app, creates a namespace and
+  lobby context on node-1, and joins node-2 via a namespace invitation.
+  Stops short of match creation — Playwright drives matches and gameplay
+  through the UI.
+
+  stop_all_nodes: false keeps the merod containers alive after merobox exits
+  so the Playwright job can reach the admin/RPC API on each node.
+
+force_pull_image: true
+
+# Auth-service ON: nodes are reached at http://nodeN.127.0.0.1.nip.io
+# through Traefik. Browsers from a different origin (Vite at :5173)
+# need merobox >=0.6.9 so that OPTIONS preflights bypass forward-auth
+# (calimero-network/merobox#228).
+
+auth_service: true
+
+nodes:
+  count: 2
+  image: ghcr.io/calimero-network/merod:edge
+  prefix: calimero-node
+
+steps:
+  - name: Install Battleships App on Node 1
+    type: install_application
+    node: calimero-node-1
+    path: ../logic/res/battleships-0.3.0.mpk
+    dev: true
+    outputs:
+      app_id: applicationId
+
+  - name: Create Namespace on Node 1
+    type: create_namespace
+    node: calimero-node-1
+    application_id: '{{app_id}}'
+    outputs:
+      namespace_id: namespaceId
+
+  - name: Create Lobby Context in Namespace
+    type: create_context
+    node: calimero-node-1
+    application_id: '{{app_id}}'
+    group_id: '{{namespace_id}}'
+    service_name: lobby
+    outputs:
+      lobby_ctx_id: contextId
+      p1_key: memberPublicKey
+
+  - name: Assert Lobby Context Created
+    type: assert
+    statements:
+      - 'is_set({{lobby_ctx_id}})'
+      - 'is_set({{p1_key}})'
+
+  - name: Create Namespace Invitation
+    type: create_namespace_invitation
+    node: calimero-node-1
+    namespace_id: '{{namespace_id}}'
+    outputs:
+      invitation: invitation
+
+  - name: Wait for Namespace Gossip Propagation
+    type: wait
+    seconds: 10
+    message: Waiting for namespace gossip to reach node 2
+
+  - name: Node 2 Joins Namespace
+    type: join_namespace
+    node: calimero-node-2
+    namespace_id: '{{namespace_id}}'
+    invitation: '{{invitation}}'
+    outputs:
+      p2_identity: memberIdentity
+
+  - name: Node 2 Joins Lobby Context
+    type: join_context
+    node: calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    outputs:
+      lobby_ctx_id_node2: contextId
+      p2_key: memberPublicKey
+
+  - name: Assert Node 2 Joined
+    type: assert
+    statements:
+      - 'is_set({{p2_key}})'
+      - 'is_set({{p2_identity}})'
+
+  - name: Wait for Lobby Sync
+    type: wait_for_sync
+    nodes:
+      - calimero-node-1
+      - calimero-node-2
+    context_id: '{{lobby_ctx_id}}'
+    timeout: 30
+
+stop_all_nodes: false

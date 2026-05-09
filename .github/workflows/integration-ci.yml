@@ -1,0 +1,339 @@
+# Full-stack browser integration tests.
+#
+# Builds the WASM bundle against current core master, brings up two merod
+# nodes via merobox, seeds a namespace + lobby + two members, mints JWTs,
+# then runs the Playwright suite against the live stack from a real browser.
+#
+# Phase A (merobox setup) runs the lean `workflow-battleships-integration-setup.yml`
+# which stops short of match creation. Match + gameplay are driven by Playwright.
+
+name: Integration Tests (Browser)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "logic/**"
+      - "e2e/workflow-battleships-integration-setup.yml"
+      - "e2e/workflow-battleships-e2e.yml"
+      - ".github/workflows/integration-ci.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "app/**"
+      - "logic/**"
+      - "e2e/workflow-battleships-integration-setup.yml"
+      - "e2e/workflow-battleships-e2e.yml"
+      - ".github/workflows/integration-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Browser Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Build WASM bundle
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            logic/target
+          key: integration-${{ runner.os }}-${{ hashFiles('logic/Cargo.toml', 'logic/crates/*/Cargo.toml') }}
+          restore-keys: integration-${{ runner.os }}-
+
+      - name: Build bundle
+        working-directory: logic
+        run: ./build-bundle.sh
+
+      - name: Install merobox
+        run: |
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user "merobox==0.6.9"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/merobox" --version
+
+      # Run setup workflow (stop_all_nodes: false leaves nodes alive)
+      - name: Run Battleships Integration Setup
+        working-directory: e2e
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/docker-logs"
+          LOGDIR="$GITHUB_WORKSPACE/docker-logs"
+          WATCHER_STATE_DIR="$(mktemp -d)"
+          ATTEMPT_FILE="$WATCHER_STATE_DIR/.attempt"
+          echo 1 > "$ATTEMPT_FILE"
+          (
+              while [ ! -f "$WATCHER_STATE_DIR/stop" ]; do
+                  cur=$(cat "$ATTEMPT_FILE" 2>/dev/null || echo 1)
+                  for c in $(docker ps --filter "label=calimero.node=true" --format "{{.Names}}" 2>/dev/null | grep -v -- '-init$' || true); do
+                      mark="$WATCHER_STATE_DIR/${c}-attempt${cur}"
+                      if [ ! -f "$mark" ]; then
+                          touch "$mark"
+                          echo "[log-watcher] following $c (attempt $cur)"
+                          docker logs -f "$c" > "$LOGDIR/setup-${c}.log" 2>&1 &
+                      fi
+                  done
+                  sleep 1
+              done
+          ) &
+          WATCHER_PID=$!
+          echo "WATCHER_PID=$WATCHER_PID" >> "$GITHUB_ENV"
+          echo "WATCHER_STATE_DIR=$WATCHER_STATE_DIR" >> "$GITHUB_ENV"
+
+          merobox stop --all 2>/dev/null || true
+          merobox nuke --force 2>/dev/null || true
+
+          # merobox's CleanupMixin registers an atexit handler that
+          # unconditionally tears down its tracked containers when the
+          # python process exits, which makes `stop_all_nodes: false`
+          # ineffective at keeping nodes alive after the CLI returns.
+          # We run it in the background and SIGKILL once the workflow
+          # logs "Workflow completed successfully!" — SIGKILL bypasses
+          # atexit and the docker containers (separate process tree)
+          # outlive merobox.
+          MEROBOX_LOG="$GITHUB_WORKSPACE/docker-logs/merobox-setup.log"
+          merobox bootstrap run workflow-battleships-integration-setup.yml \
+            > "$MEROBOX_LOG" 2>&1 &
+          MEROBOX_PID=$!
+          echo "merobox PID=$MEROBOX_PID, log=$MEROBOX_LOG"
+
+          # Wait up to 5 minutes for the workflow to finish. We watch for
+          # the success line; on failure merobox will exit on its own and
+          # the wait $MEROBOX_PID below will return non-zero.
+          for i in $(seq 1 300); do
+            if grep -q "Workflow completed successfully" "$MEROBOX_LOG" 2>/dev/null; then
+              echo "merobox setup workflow completed; SIGKILLing to skip atexit cleanup"
+              kill -9 "$MEROBOX_PID" 2>/dev/null || true
+              break
+            fi
+            if ! kill -0 "$MEROBOX_PID" 2>/dev/null; then
+              echo "merobox process exited before completion line — workflow failed"
+              tail -100 "$MEROBOX_LOG" || true
+              exit 1
+            fi
+            sleep 1
+          done
+          wait "$MEROBOX_PID" 2>/dev/null || true
+
+          echo "--- docker ps after setup ---"
+          docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+
+          # Sanity check: both merod containers must still be running.
+          if ! docker ps --format '{{.Names}}' | grep -q '^calimero-node-1$'; then
+            echo "calimero-node-1 not running after setup — cannot continue"
+            exit 1
+          fi
+          if ! docker ps --format '{{.Names}}' | grep -q '^calimero-node-2$'; then
+            echo "calimero-node-2 not running after setup — cannot continue"
+            exit 1
+          fi
+
+      # Mint JWTs and discover IDs (auth_service: true → Bearer required)
+      - name: Bootstrap auth and write env file
+        run: |
+          set -euo pipefail
+          NODE_1_URL="http://node1.127.0.0.1.nip.io"
+          NODE_2_URL="http://node2.127.0.0.1.nip.io"
+          ADMIN_USER="${E2E_ADMIN_USER:-admin}"
+          ADMIN_PASS="${E2E_ADMIN_PASS:-calimero1234}"
+
+          echo "Waiting for the auth proxy + both nodes to come up..."
+          for i in $(seq 1 60); do
+            CODE_1=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_1_URL}/auth/login" || echo "000")
+            CODE_2=$(curl -s -o /dev/null -w "%{http_code}" "${NODE_2_URL}/auth/login" || echo "000")
+            if [ "${CODE_1:0:1}" = "2" ] && [ "${CODE_2:0:1}" = "2" ]; then
+              echo "Auth proxy ready (attempt ${i})  node1=${CODE_1} node2=${CODE_2}"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "Auth proxy not ready after 120s  node1=${CODE_1} node2=${CODE_2}"
+              exit 1
+            fi
+            sleep 2
+          done
+
+          mint_token() {
+            local node_url=$1
+            curl -sS -X POST "${node_url}/auth/token" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"auth_method\":   \"user_password\",
+                \"public_key\":    \"${ADMIN_USER}\",
+                \"client_name\":   \"battleships-integration-ci\",
+                \"timestamp\":     0,
+                \"permissions\":   [],
+                \"provider_data\": {\"username\": \"${ADMIN_USER}\", \"password\": \"${ADMIN_PASS}\"}
+              }"
+          }
+
+          AUTH_1=$(mint_token "${NODE_1_URL}")
+          AUTH_2=$(mint_token "${NODE_2_URL}")
+
+          ACCESS_TOKEN_1=$(echo "$AUTH_1" | jq -r '.data.access_token // empty')
+          REFRESH_TOKEN_1=$(echo "$AUTH_1" | jq -r '.data.refresh_token // empty')
+          ACCESS_TOKEN_2=$(echo "$AUTH_2" | jq -r '.data.access_token // empty')
+          REFRESH_TOKEN_2=$(echo "$AUTH_2" | jq -r '.data.refresh_token // empty')
+
+          [ -n "$ACCESS_TOKEN_1" ] || { echo "Node 1 auth failed: $AUTH_1"; exit 1; }
+          [ -n "$ACCESS_TOKEN_2" ] || { echo "Node 2 auth failed: $AUTH_2"; exit 1; }
+
+          probe_admin() {
+            local node_url=$1
+            local path=$2
+            local token=$3
+            local body
+            body=$(curl -sS -o /tmp/probe.body -w "%{http_code}" \
+              -H "Authorization: Bearer ${token}" \
+              "${node_url}${path}")
+            echo "GET ${node_url}${path} → HTTP ${body}" >&2
+            head -c 400 /tmp/probe.body >&2; echo >&2
+            cat /tmp/probe.body
+          }
+
+          echo "--- discover application ---"
+          APPS=$(probe_admin "${NODE_1_URL}" "/admin-api/applications" "${ACCESS_TOKEN_1}")
+          APP_ID=$(echo "$APPS" | jq -r '.data.apps[0].id // empty')
+
+          echo "--- discover namespace ---"
+          NS_RESP=$(probe_admin "${NODE_1_URL}" "/admin-api/namespaces" "${ACCESS_TOKEN_1}")
+          NS_ID=$(echo "$NS_RESP" | jq -r '.data[0].namespaceId // empty')
+
+          echo "--- discover lobby context ---"
+          CTXS=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts" "${ACCESS_TOKEN_1}")
+          CTX_ID=$(echo "$CTXS" | jq -r '.data.contexts[0].id // empty')
+
+          MEMBER_KEY_1=""
+          MEMBER_KEY_2=""
+          if [ -n "$CTX_ID" ]; then
+            echo "--- discover member keys ---"
+            IDS_1=$(probe_admin "${NODE_1_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_1}")
+            MEMBER_KEY_1=$(echo "$IDS_1" | jq -r '.data.identities[0] // empty')
+
+            IDS_2=$(probe_admin "${NODE_2_URL}" "/admin-api/contexts/${CTX_ID}/identities-owned" "${ACCESS_TOKEN_2}")
+            MEMBER_KEY_2=$(echo "$IDS_2" | jq -r '.data.identities[0] // empty')
+          fi
+
+          [ -n "$APP_ID" ]       || { echo "Failed to discover application id"; exit 1; }
+          [ -n "$NS_ID" ]        || { echo "Failed to discover namespace id";   exit 1; }
+          [ -n "$CTX_ID" ]       || { echo "Failed to discover lobby context";  exit 1; }
+          [ -n "$MEMBER_KEY_1" ] || { echo "Failed to discover node-1 member key"; exit 1; }
+          [ -n "$MEMBER_KEY_2" ] || { echo "Failed to discover node-2 member key"; exit 1; }
+
+          echo "APP_ID:    $APP_ID"
+          echo "NS_ID:     $NS_ID"
+          echo "CTX_ID:    $CTX_ID"
+          echo "MEMBER_1:  $MEMBER_KEY_1"
+          echo "MEMBER_2:  $MEMBER_KEY_2"
+
+          printf '%s\n' \
+            "E2E_APPLICATION_ID=${APP_ID}" \
+            "E2E_NAMESPACE_ID=${NS_ID}" \
+            "E2E_LOBBY_CONTEXT_ID=${CTX_ID}" \
+            "" \
+            "E2E_NODE_URL=${NODE_1_URL}" \
+            "E2E_ACCESS_TOKEN=${ACCESS_TOKEN_1}" \
+            "E2E_REFRESH_TOKEN=${REFRESH_TOKEN_1}" \
+            "E2E_MEMBER_KEY=${MEMBER_KEY_1}" \
+            "" \
+            "E2E_NODE_URL_2=${NODE_2_URL}" \
+            "E2E_ACCESS_TOKEN_2=${ACCESS_TOKEN_2}" \
+            "E2E_REFRESH_TOKEN_2=${REFRESH_TOKEN_2}" \
+            "E2E_MEMBER_KEY_2=${MEMBER_KEY_2}" \
+            > app/.env.integration
+          echo "app/.env.integration written"
+
+      # Frontend setup
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('app/pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Install Playwright Chromium
+        working-directory: app
+        run: pnpm exec playwright install chromium --with-deps
+
+      # Run Playwright integration project
+      - name: Run integration tests
+        working-directory: app
+        env:
+          CI: "true"
+          INTEGRATION_MODE: "true"
+        run: pnpm exec playwright test --project=integration
+
+      # Cleanup
+      - name: Stop merod nodes
+        if: always()
+        run: |
+          if [ -n "${WATCHER_STATE_DIR:-}" ]; then
+            touch "$WATCHER_STATE_DIR/stop" || true
+          fi
+          if [ -n "${WATCHER_PID:-}" ]; then
+            kill "$WATCHER_PID" 2>/dev/null || true
+          fi
+          for pid in $(jobs -p); do kill "$pid" 2>/dev/null || true; done
+          merobox stop --all 2>/dev/null || true
+          merobox nuke --force 2>/dev/null || true
+
+      # Artifacts
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ env.SHA }}
+          path: app/playwright-report/
+          retention-days: 7
+
+      - name: Upload Playwright traces & test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ env.SHA }}
+          path: app/test-results/
+          retention-days: 7
+
+      - name: Upload merod docker logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-docker-logs-${{ env.SHA }}
+          path: docker-logs/
+          retention-days: 7
+          if-no-files-found: ignore

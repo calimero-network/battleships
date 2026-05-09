@@ -29,6 +29,7 @@ export default function ShipSelector({
           return (
             <button
               key={len}
+              data-ship-len={len}
               className={`ship-btn ${active ? 'ship-btn-active' : ''}`}
               disabled={full}
               onClick={() => onSelectShip(active ? null : idx)}
