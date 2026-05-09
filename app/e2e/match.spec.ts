@@ -76,8 +76,11 @@ test.describe('Match (full game playthrough)', () => {
     const p1Ctx = await browser.newContext();
     const p2Ctx = await browser.newContext();
 
-    await bypassCors(p1Ctx, env.node1.url, env.node2.url);
-    await bypassCors(p2Ctx, env.node1.url, env.node2.url);
+    // Each context uses its own node's bearer token. The route handler
+    // re-injects Authorization for outbound requests since Chromium drops
+    // it cross-origin without a fully-successful preflight.
+    await bypassCors(p1Ctx, [{ nodeUrl: env.node1.url, accessToken: env.node1.accessToken }]);
+    await bypassCors(p2Ctx, [{ nodeUrl: env.node2.url, accessToken: env.node2.accessToken }]);
 
     await seedAuth(p1Ctx, env.node1);
     await seedAuth(p2Ctx, env.node2);

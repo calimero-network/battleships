@@ -19,7 +19,7 @@ test.describe('Diagnostics', () => {
       console.log(`[browser requestfailed] ${req.method()} ${req.url()} → ${req.failure()?.errorText}`);
     });
 
-    await bypassCors(page, env.node1.url);
+    await bypassCors(page, [{ nodeUrl: env.node1.url, accessToken: env.node1.accessToken }]);
     await injectMeroAuth(page, {
       nodeUrl: env.node1.url,
       accessToken: env.node1.accessToken,

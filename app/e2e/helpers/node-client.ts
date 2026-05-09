@@ -33,21 +33,26 @@ export async function injectMeroAuth(page: Page, opts: InjectAuthOptions): Promi
 }
 
 /**
- * Installs a route handler that injects CORS headers onto every response from
- * the merod node, and short-circuits OPTIONS preflights with a permissive 204.
+ * Route handler that turns every cross-origin merod request into something the
+ * browser will accept, and re-injects the Bearer token server-side because
+ * Chromium drops the Authorization header on cross-origin fetches whose
+ * preflight didn't fully succeed (which is our case — Traefik's forward-auth
+ * middleware kills the OPTIONS preflight before CORS headers attach).
  *
- * Required because Traefik's forward-auth middleware on the integration stack
- * rejects unauthenticated OPTIONS preflights, stripping the Access-Control-*
- * headers — without this, the browser blocks every cross-origin admin-api
- * fetch from the Vite dev server origin.
+ * - OPTIONS preflights are short-circuited with a permissive 204.
+ * - Real requests are re-issued from Node with `Authorization: Bearer <token>`
+ *   forced, then the response is overlaid with Access-Control-Allow-Origin so
+ *   the browser does not reject it.
  */
-export async function bypassCors(target: BrowserContext | Page, ...nodeUrls: string[]): Promise<void> {
-  const hosts = nodeUrls.map((u) => new URL(u).host);
-  for (const host of hosts) {
+export async function bypassCors(
+  target: BrowserContext | Page,
+  bindings: ReadonlyArray<{ nodeUrl: string; accessToken: string }>,
+): Promise<void> {
+  for (const { nodeUrl, accessToken } of bindings) {
+    const host = new URL(nodeUrl).host;
     await target.route(`http://${host}/**`, async (route: Route) => {
       const req = route.request();
-      const origin = req.headerValue('origin');
-      const allowOrigin = (await origin) ?? '*';
+      const allowOrigin = (await req.headerValue('origin')) ?? '*';
 
       if (req.method() === 'OPTIONS') {
         await route.fulfill({
@@ -64,14 +69,18 @@ export async function bypassCors(target: BrowserContext | Page, ...nodeUrls: str
         return;
       }
 
-      const response = await route.fetch();
       const headers = {
+        ...req.headers(),
+        authorization: `Bearer ${accessToken}`,
+      };
+      const response = await route.fetch({ headers });
+      const respHeaders = {
         ...response.headers(),
         'access-control-allow-origin': allowOrigin,
         'access-control-allow-credentials': 'true',
         'access-control-expose-headers': 'X-Auth-Error,Content-Length',
       };
-      await route.fulfill({ response, headers });
+      await route.fulfill({ response, headers: respHeaders });
     });
   }
 }
