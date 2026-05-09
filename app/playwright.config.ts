@@ -49,6 +49,18 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: { cookies: [], origins: [] },
         trace: 'on',
+        // Traefik's forward-auth middleware rejects OPTIONS preflight (no
+        // Authorization header by browser-spec), which strips CORS headers
+        // and blocks every cross-origin admin-api fetch from localhost:5173.
+        // Disabling web security in the test browser bypasses the preflight.
+        // Production code paths are unaffected — same-origin deployments
+        // don't see this preflight in the first place.
+        launchOptions: {
+          args: [
+            '--disable-web-security',
+            '--disable-site-isolation-trials',
+          ],
+        },
       },
     },
   ],
