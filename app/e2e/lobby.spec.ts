@@ -82,7 +82,7 @@ test.describe('Lobby Picker (integration)', () => {
   test('lists the seeded lobby and switches to cards view', async ({ page }) => {
     // Bare /lobby (no ?id=) keeps the picker visible instead of auto-entering.
     await page.goto('/lobby');
-    await expect(page.getByText('Add a Lobby')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.naval-card-title', { hasText: 'Add a Lobby' })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('.lobby-row').first()).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole('button', { name: /cards/i }).click();
@@ -91,7 +91,7 @@ test.describe('Lobby Picker (integration)', () => {
 
   test('swaps between Create new and Join via invitation tabs', async ({ page }) => {
     await page.goto('/lobby');
-    await expect(page.getByText('Add a Lobby')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.naval-card-title', { hasText: 'Add a Lobby' })).toBeVisible({ timeout: 30_000 });
 
     await expect(page.getByPlaceholder(/Lobby name/i)).toBeVisible();
 

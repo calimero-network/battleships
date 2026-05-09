@@ -156,8 +156,11 @@ async function openMatchOnP2(p2: Page): Promise<void> {
 async function waitForGameView(page: Page): Promise<void> {
   await page.waitForURL(/\/match\?/, { timeout: 60_000 });
   // matchApiReady gates Deploy Fleet; this loader card appears while we wait.
+  // 'Deploy Fleet' appears in both the card title and the button — scope to
+  // the title to disambiguate.
   await expect(
-    page.getByText('Deploy Fleet').or(page.getByText('Joining match…')),
+    page.locator('.naval-card-title', { hasText: 'Deploy Fleet' })
+      .or(page.getByText('Joining match…')),
   ).toBeVisible({ timeout: 60_000 });
 }
 
