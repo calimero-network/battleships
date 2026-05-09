@@ -106,7 +106,13 @@ jobs:
 
           merobox stop --all 2>/dev/null || true
           merobox nuke --force 2>/dev/null || true
-          merobox bootstrap run workflow-battleships-integration-setup.yml --e2e-mode
+          # No --e2e-mode here: that flag forces post-workflow node teardown,
+          # which would defeat stop_all_nodes:false. The Playwright job needs
+          # the merod containers to outlive the merobox process.
+          merobox bootstrap run workflow-battleships-integration-setup.yml
+
+          echo "--- docker ps after setup ---"
+          docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
 
       # Mint JWTs and discover IDs
       - name: Bootstrap auth and write env file
