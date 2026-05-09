@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useNamespacesForApplication,
   useGroupContexts,
-  useGroupMembers,
   useCreateNamespaceInvitation,
   useJoinNamespace,
   useMero,
 } from '@calimero-network/mero-react';
 import type { GroupMember } from '@calimero-network/mero-react';
+import { useNamespaceMembers } from './useNamespaceMembers';
 import { useNamespaceBootstrap } from './useNamespaceBootstrap';
 
 const SELECTED_NS_KEY = 'battleships:selectedNamespaceId';
@@ -127,7 +127,7 @@ export function useBattleshipsLobby(): UseBattleshipsLobbyReturn {
     members,
     selfIdentity,
     loading: membersLoading,
-  } = useGroupMembers(namespaceId);
+  } = useNamespaceMembers(namespaceId);
 
   // --- Mutations ---
   const { createNamespaceInvitation, loading: inviteLoading } = useCreateNamespaceInvitation();
