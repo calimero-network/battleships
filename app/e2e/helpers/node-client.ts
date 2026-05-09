@@ -69,24 +69,36 @@ export async function bypassCors(
         return;
       }
 
-      // Strip browser-set headers that confuse Traefik's routing/CORS
-      // (Origin, Referer) and any auth-bearing headers we'll re-set ourselves.
-      const original = req.headers();
-      const filtered: Record<string, string> = {};
-      for (const [k, v] of Object.entries(original)) {
-        const lk = k.toLowerCase();
-        if (lk === 'origin' || lk === 'referer' || lk === 'authorization') continue;
-        filtered[k] = v;
-      }
-      filtered['authorization'] = `Bearer ${accessToken}`;
-      const response = await route.fetch({ headers: filtered });
-      const respHeaders = {
-        ...response.headers(),
+      // Re-issue with Node's native fetch so we have full control over what
+      // headers go out — Playwright's route.fetch was forwarding browser
+      // header state that made Traefik 404 the request.
+      const outHeaders: Record<string, string> = {
+        accept: 'application/json',
+        authorization: `Bearer ${accessToken}`,
+      };
+      const ct = await req.headerValue('content-type');
+      if (ct) outHeaders['content-type'] = ct;
+
+      const init: RequestInit = { method: req.method(), headers: outHeaders };
+      const postBuf = req.postDataBuffer();
+      if (postBuf) (init as { body: Buffer }).body = postBuf;
+
+      console.log('[route] fwd', req.method(), req.url());
+      const r = await fetch(req.url(), init);
+      const body = Buffer.from(await r.arrayBuffer());
+      console.log('[route] resp', r.status, 'len=', body.length);
+
+      const respHeaders: Record<string, string> = {
         'access-control-allow-origin': allowOrigin,
         'access-control-allow-credentials': 'true',
         'access-control-expose-headers': 'X-Auth-Error,Content-Length',
       };
-      await route.fulfill({ response, headers: respHeaders });
+      r.headers.forEach((v, k) => {
+        if (k.toLowerCase().startsWith('access-control-')) return;
+        respHeaders[k] = v;
+      });
+
+      await route.fulfill({ status: r.status, headers: respHeaders, body });
     });
   }
 }
