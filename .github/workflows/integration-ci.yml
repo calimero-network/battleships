@@ -161,6 +161,15 @@ jobs:
           ADMIN_USER="${E2E_ADMIN_USER:-admin}"
           ADMIN_PASS="${E2E_ADMIN_PASS:-calimero1234}"
 
+          echo "--- DNS / endpoint smoke ---"
+          getent hosts node1.127.0.0.1.nip.io || echo "(getent: not found)"
+          curl -sS -o /tmp/probe.out -w "GET ${NODE_1_URL}/ → HTTP %{http_code}\n" "${NODE_1_URL}/" || true
+          curl -sS -o /tmp/probe.out -w "GET ${NODE_1_URL}/admin-api/health → HTTP %{http_code}\n" "${NODE_1_URL}/admin-api/health" || true
+          curl -sS -o /tmp/probe.out -w "GET http://localhost:80/ → HTTP %{http_code}\n" "http://localhost:80/" || true
+          curl -sS -o /tmp/probe.out -w "GET localhost:80 (Host: node1.…nip.io) → HTTP %{http_code}\n" -H "Host: node1.127.0.0.1.nip.io" "http://localhost:80/admin-api/health" || true
+          echo "--- /etc/hosts excerpt ---"
+          grep -E "(127\.0\.0\.1|node[12])" /etc/hosts || true
+
           echo "Waiting for both nodes to be healthy..."
           for i in $(seq 1 30); do
             if curl -sf "${NODE_1_URL}/admin-api/health" >/dev/null 2>&1 && \
