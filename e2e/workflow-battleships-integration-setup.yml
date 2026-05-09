@@ -11,10 +11,12 @@ description: >
 
 force_pull_image: true
 
-# Enable the Traefik auth-service proxy so the runner (and Chromium) can
-# reach the admin/RPC API at http://nodeN.127.0.0.1.nip.io and mint JWTs
-# via /auth/token. Without this the admin port is only docker-internal.
-auth_service: true
+# auth_service intentionally OFF: with the Traefik auth-service stack
+# enabled, /admin-api goes through forward-auth middleware whose OPTIONS
+# preflight handling kills cross-origin browser fetches. Without it,
+# merod's admin API is reachable directly on localhost:2528/2529 with
+# wildcard CORS and no JWT required, which is what the Playwright tests
+# need.
 
 nodes:
   count: 2

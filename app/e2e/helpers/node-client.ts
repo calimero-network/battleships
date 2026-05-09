@@ -6,7 +6,7 @@
  * auto-selects the seeded lobby instead of waiting on the user.
  */
 
-import type { BrowserContext, Page, Route } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 export interface InjectAuthOptions {
   nodeUrl: string;
@@ -32,73 +32,3 @@ export async function injectMeroAuth(page: Page, opts: InjectAuthOptions): Promi
   }, opts);
 }
 
-/**
- * Route handler that turns every cross-origin merod request into something the
- * browser will accept, and re-injects the Bearer token server-side because
- * Chromium drops the Authorization header on cross-origin fetches whose
- * preflight didn't fully succeed (which is our case — Traefik's forward-auth
- * middleware kills the OPTIONS preflight before CORS headers attach).
- *
- * - OPTIONS preflights are short-circuited with a permissive 204.
- * - Real requests are re-issued from Node with `Authorization: Bearer <token>`
- *   forced, then the response is overlaid with Access-Control-Allow-Origin so
- *   the browser does not reject it.
- */
-export async function bypassCors(
-  target: BrowserContext | Page,
-  bindings: ReadonlyArray<{ nodeUrl: string; accessToken: string }>,
-): Promise<void> {
-  for (const { nodeUrl, accessToken } of bindings) {
-    const host = new URL(nodeUrl).host;
-    await target.route(`http://${host}/**`, async (route: Route) => {
-      const req = route.request();
-      const allowOrigin = (await req.headerValue('origin')) ?? '*';
-
-      if (req.method() === 'OPTIONS') {
-        await route.fulfill({
-          status: 204,
-          headers: {
-            'access-control-allow-origin': allowOrigin,
-            'access-control-allow-credentials': 'true',
-            'access-control-allow-methods': 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
-            'access-control-allow-headers':
-              'Authorization,Content-Type,Accept,X-Requested-With,X-Auth-Token,Cache-Control',
-            'access-control-max-age': '600',
-          },
-        });
-        return;
-      }
-
-      // Re-issue with Node's native fetch so we have full control over what
-      // headers go out — Playwright's route.fetch was forwarding browser
-      // header state that made Traefik 404 the request.
-      const outHeaders: Record<string, string> = {
-        accept: 'application/json',
-        authorization: `Bearer ${accessToken}`,
-      };
-      const ct = await req.headerValue('content-type');
-      if (ct) outHeaders['content-type'] = ct;
-
-      const init: RequestInit = { method: req.method(), headers: outHeaders };
-      const postBuf = req.postDataBuffer();
-      if (postBuf) (init as { body: Buffer }).body = postBuf;
-
-      console.log('[route] fwd', req.method(), req.url());
-      const r = await fetch(req.url(), init);
-      const body = Buffer.from(await r.arrayBuffer());
-      console.log('[route] resp', r.status, 'len=', body.length);
-
-      const respHeaders: Record<string, string> = {
-        'access-control-allow-origin': allowOrigin,
-        'access-control-allow-credentials': 'true',
-        'access-control-expose-headers': 'X-Auth-Error,Content-Length',
-      };
-      r.headers.forEach((v, k) => {
-        if (k.toLowerCase().startsWith('access-control-')) return;
-        respHeaders[k] = v;
-      });
-
-      await route.fulfill({ status: r.status, headers: respHeaders, body });
-    });
-  }
-}

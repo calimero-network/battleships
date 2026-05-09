@@ -9,7 +9,6 @@
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { envAvailable, getEnv, type NodeEnv } from './helpers/rpc-client';
-import { bypassCors } from './helpers/node-client';
 
 const SHIP_PLACEMENTS_P1 = [
   { len: 2, x: 0, y: 0 },
@@ -75,12 +74,6 @@ test.describe('Match (full game playthrough)', () => {
 
     const p1Ctx = await browser.newContext();
     const p2Ctx = await browser.newContext();
-
-    // Each context uses its own node's bearer token. The route handler
-    // re-injects Authorization for outbound requests since Chromium drops
-    // it cross-origin without a fully-successful preflight.
-    await bypassCors(p1Ctx, [{ nodeUrl: env.node1.url, accessToken: env.node1.accessToken }]);
-    await bypassCors(p2Ctx, [{ nodeUrl: env.node2.url, accessToken: env.node2.accessToken }]);
 
     await seedAuth(p1Ctx, env.node1);
     await seedAuth(p2Ctx, env.node2);
