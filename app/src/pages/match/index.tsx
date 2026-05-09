@@ -9,7 +9,7 @@ import {
 } from '@calimero-network/mero-react';
 import { createLobbyClient, createGameClient, LobbyClient, GameClient } from '../../features/kv/api';
 import type { ContextRole } from '../../features/kv/api';
-import type { MatchSummary } from '../../api/lobby/LobbyClient';
+import type { MatchSummary, MatchRecord, PlayerStatsView } from '../../api/lobby/LobbyClient';
 import type { AllGameEvents } from '../../types/events';
 import { useGameSubscriptions } from '../../hooks/useGameSubscriptions';
 import { useBattleshipsLobby } from '../../hooks/useBattleshipsLobby';
@@ -89,6 +89,8 @@ export default function MatchPage() {
   const [player2, setPlayer2] = useState<string>('');
   const [myMatches, setMyMatches] = useState<MatchSummary[]>([]);
   const [creatingMatch, setCreatingMatch] = useState(false);
+  const [playerStats, setPlayerStats] = useState<PlayerStatsView | null>(null);
+  const [history, setHistory] = useState<MatchRecord[]>([]);
 
   // Game state
   const [size, setSize] = useState<number>(10);
@@ -251,6 +253,26 @@ export default function MatchPage() {
     } catch { /* non-critical */ }
   }, [lobbyApi]);
 
+  const refreshHistory = useCallback(async () => {
+    if (!lobbyApi) return;
+    try {
+      const records = await lobbyApi.getHistory();
+      setHistory(records);
+    } catch { /* non-critical */ }
+  }, [lobbyApi]);
+
+  const refreshPlayerStats = useCallback(async () => {
+    if (!lobbyApi || !currentUser) return;
+    try {
+      const stats = await lobbyApi.getPlayerStats({ player: currentUser });
+      setPlayerStats(stats);
+    } catch { /* non-critical — no record yet for this player */ }
+  }, [lobbyApi, currentUser]);
+
+  // Initial fetch + refresh whenever the lobby client or current user changes.
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
+  useEffect(() => { refreshPlayerStats(); }, [refreshPlayerStats]);
+
   // Safety-net poll for match status. The `MatchEnded` / `Winner` events are
   // emitted from the game context and delivered over SSE, but when the winning
   // delta arrives on the losing node via sync catch-up instead of a gossipsub
@@ -274,9 +296,13 @@ export default function MatchPage() {
       }
       if (event.type === 'MatchListUpdated' || event.type === 'MatchCreated' || event.type === 'MatchEnded' || event.type === 'Winner') {
         refreshMatchList();
+        refreshHistory();
+      }
+      if (event.type === 'PlayerStatsUpdated') {
+        refreshPlayerStats();
       }
     },
-    [isMyTurn, refreshMatchList],
+    [isMyTurn, refreshMatchList, refreshHistory, refreshPlayerStats],
   );
 
   // ---------------------------------------------------------------------------
@@ -778,6 +804,9 @@ export default function MatchPage() {
               onCreateMatch={createMatch}
               matches={myMatches}
               onOpenGame={openGame}
+              playerStats={playerStats}
+              history={history}
+              currentUser={currentUser}
             />
           </div>
         </div>
