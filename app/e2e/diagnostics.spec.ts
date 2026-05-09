@@ -34,8 +34,7 @@ test.describe('Diagnostics', () => {
     const ls = await page.evaluate(() => {
       const out: Record<string, string | null> = {};
       for (const k of [
-        'mero:access_token',
-        'mero:refresh_token',
+        'mero-tokens',
         'mero:expires_at',
         'mero:node_url',
         'mero:application_id',
