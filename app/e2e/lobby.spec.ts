@@ -44,10 +44,14 @@ test.describe('Lobby (integration)', () => {
   test('exposes the executor key with a copy affordance', async ({ page }) => {
     const env = getEnv();
     await page.goto(`/lobby?id=${encodeURIComponent(env.namespaceId)}`);
-    await expect(page.getByText('Your Key')).toBeVisible({ timeout: 30_000 });
-    // Truncated key uses ellipsis: first 12 chars … last 8.
+    // Scope to the "Your Key" info-pair: the same truncated string also
+    // renders inside the Members list, which would trip strict-mode locators.
+    const yourKeyPair = page.locator('.info-pair', { hasText: 'Your Key' });
+    await expect(yourKeyPair).toBeVisible({ timeout: 30_000 });
     const head = env.node1.memberKey.slice(0, 12);
-    await expect(page.getByText(new RegExp(`^${escapeRegex(head)}\\.\\.\\.`))).toBeVisible();
+    await expect(
+      yourKeyPair.getByText(new RegExp(`^${escapeRegex(head)}\\.\\.\\.`)),
+    ).toBeVisible();
   });
 
   test('renders the New Match form', async ({ page }) => {

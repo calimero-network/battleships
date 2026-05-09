@@ -6,7 +6,7 @@
  * auto-selects the seeded lobby instead of waiting on the user.
  */
 
-import type { Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 
 export interface InjectAuthOptions {
   nodeUrl: string;
@@ -18,8 +18,12 @@ export interface InjectAuthOptions {
   memberKey: string;
 }
 
-export async function injectMeroAuth(page: Page, opts: InjectAuthOptions): Promise<void> {
-  await page.addInitScript((data) => {
+// Page and BrowserContext both expose addInitScript; tests that open multiple
+// pages per node share their auth at the context level.
+type InitScriptTarget = Pick<Page, 'addInitScript'> | Pick<BrowserContext, 'addInitScript'>;
+
+export async function injectMeroAuth(target: InitScriptTarget, opts: InjectAuthOptions): Promise<void> {
+  await target.addInitScript((data) => {
     const expiresAt = Date.now() + 3_600_000;
     // mero-js's LocalStorageTokenStore (the one MeroProvider actually uses)
     // stores a single JSON blob under 'mero-tokens'. The namespaced

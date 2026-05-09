@@ -9,6 +9,7 @@
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { envAvailable, getEnv, type NodeEnv } from './helpers/rpc-client';
+import { injectMeroAuth } from './helpers/node-client';
 
 const SHIP_PLACEMENTS_P1 = [
   { len: 2, x: 0, y: 0 },
@@ -122,17 +123,7 @@ test.describe('Match (full game playthrough)', () => {
 
 async function seedAuth(ctx: BrowserContext, node: NodeEnv): Promise<void> {
   const env = getEnv();
-  await ctx.addInitScript((data) => {
-    const expiresAt = String(Date.now() + 3_600_000);
-    localStorage.setItem('mero:access_token', data.accessToken);
-    localStorage.setItem('mero:refresh_token', data.refreshToken);
-    localStorage.setItem('mero:expires_at', expiresAt);
-    localStorage.setItem('mero:node_url', data.nodeUrl);
-    localStorage.setItem('mero:application_id', data.applicationId);
-    localStorage.setItem('mero:context_id', data.lobbyContextId);
-    localStorage.setItem('mero:context_identity', data.memberKey);
-    localStorage.setItem('battleships:selectedNamespaceId', data.namespaceId);
-  }, {
+  await injectMeroAuth(ctx, {
     nodeUrl: node.url,
     accessToken: node.accessToken,
     refreshToken: node.refreshToken,
