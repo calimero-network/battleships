@@ -106,13 +106,51 @@ jobs:
 
           merobox stop --all 2>/dev/null || true
           merobox nuke --force 2>/dev/null || true
-          # No --e2e-mode here: that flag forces post-workflow node teardown,
-          # which would defeat stop_all_nodes:false. The Playwright job needs
-          # the merod containers to outlive the merobox process.
-          merobox bootstrap run workflow-battleships-integration-setup.yml
+
+          # merobox's CleanupMixin registers an atexit handler that
+          # unconditionally tears down its tracked containers when the
+          # python process exits, which makes `stop_all_nodes: false`
+          # ineffective at keeping nodes alive after the CLI returns.
+          # We run it in the background and SIGKILL once the workflow
+          # logs "Workflow completed successfully!" — SIGKILL bypasses
+          # atexit and the docker containers (separate process tree)
+          # outlive merobox.
+          MEROBOX_LOG="$GITHUB_WORKSPACE/docker-logs/merobox-setup.log"
+          merobox bootstrap run workflow-battleships-integration-setup.yml \
+            > "$MEROBOX_LOG" 2>&1 &
+          MEROBOX_PID=$!
+          echo "merobox PID=$MEROBOX_PID, log=$MEROBOX_LOG"
+
+          # Wait up to 5 minutes for the workflow to finish. We watch for
+          # the success line; on failure merobox will exit on its own and
+          # the wait $MEROBOX_PID below will return non-zero.
+          for i in $(seq 1 300); do
+            if grep -q "Workflow completed successfully" "$MEROBOX_LOG" 2>/dev/null; then
+              echo "merobox setup workflow completed; SIGKILLing to skip atexit cleanup"
+              kill -9 "$MEROBOX_PID" 2>/dev/null || true
+              break
+            fi
+            if ! kill -0 "$MEROBOX_PID" 2>/dev/null; then
+              echo "merobox process exited before completion line — workflow failed"
+              tail -100 "$MEROBOX_LOG" || true
+              exit 1
+            fi
+            sleep 1
+          done
+          wait "$MEROBOX_PID" 2>/dev/null || true
 
           echo "--- docker ps after setup ---"
           docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+
+          # Sanity check: both merod containers must still be running.
+          if ! docker ps --format '{{.Names}}' | grep -q '^calimero-node-1$'; then
+            echo "calimero-node-1 not running after setup — cannot continue"
+            exit 1
+          fi
+          if ! docker ps --format '{{.Names}}' | grep -q '^calimero-node-2$'; then
+            echo "calimero-node-2 not running after setup — cannot continue"
+            exit 1
+          fi
 
       # Mint JWTs and discover IDs
       - name: Bootstrap auth and write env file
