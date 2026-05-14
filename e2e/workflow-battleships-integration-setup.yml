@@ -14,7 +14,9 @@ force_pull_image: true
 # Auth-service ON: nodes are reached at http://nodeN.127.0.0.1.nip.io
 # through Traefik. Browsers from a different origin (Vite at :5173)
 # need merobox >=0.6.9 so that OPTIONS preflights bypass forward-auth
-# (calimero-network/merobox#228).
+# (calimero-network/merobox#228). >=0.6.11 is also required because core
+# PR #2338 renamed the `alias` field to `name` on CreateNamespaceApiRequest
+# and earlier merobox releases still send the old field (#235).
 
 auth_service: true
 
