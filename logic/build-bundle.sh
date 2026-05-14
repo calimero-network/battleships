@@ -46,7 +46,7 @@ cat > res/bundle-temp/manifest.json <<EOF
   ],
   "migrations": [],
   "links": {
-    "frontend": "http://localhost:5173/"
+    "frontend": "https://battleships-calimero-app.vercel.app/"
   }
 }
 EOF
