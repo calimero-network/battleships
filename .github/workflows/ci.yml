@@ -117,7 +117,7 @@ jobs:
   # at master HEAD. That is exactly what we want: every PR's e2e run is
   # exercised against the up-to-date runtime ABI.
   #
-  # The committed `logic/res/battleships-0.3.0.mpk` is for local dev
+  # The committed `logic/res/battleships-0.3.1.mpk` is for local dev
   # convenience — CI does not consume it. The artifact uploaded here
   # is what the e2e job downloads and installs on the merod nodes.
   #

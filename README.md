@@ -32,7 +32,7 @@ battleships/
 
 ### Multi-Service Bundle
 
-The `battleships-0.3.0.mpk` bundle contains:
+The `battleships-0.3.1.mpk` bundle contains:
 
 | File | Description |
 |------|-------------|
