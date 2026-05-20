@@ -1,0 +1,16 @@
+version: 1
+
+anthropic:
+  default_model: claude-sonnet-4-6
+  enable_prompt_caching: true
+
+doc_generation:
+  enabled: true
+  model: claude-haiku-4-5-20251001
+  max_files: 10
+  static_docs_dirs:
+    - architecture/
+  pr_labels:
+    - automated-docs
+    - documentation
+  pr_draft: true

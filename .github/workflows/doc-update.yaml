@@ -1,0 +1,82 @@
+name: Doc Auto-Update
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to generate docs for (leave blank to auto-detect)"
+        type: string
+        required: false
+      dry_run:
+        description: "Dry run: print changes without opening a PR"
+        type: boolean
+        default: false
+
+concurrency:
+  group: doc-update-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Pinned SHA — bump deliberately when adopting new reviewer features.
+      - name: Install ai-code-reviewer
+        run: pip install git+https://github.com/calimero-network/ai-code-reviewer.git@713c5b1251132dd93b6ec70889e336dad3c09402
+
+      - name: Get merged PR number
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          PR_NUM=""
+          if [[ "$INPUT_PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            PR_NUM="$INPUT_PR_NUMBER"
+          fi
+
+          if [ -z "$PR_NUM" ]; then
+            if ! PR_NUM=$(gh api "/repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty'); then
+              echo "::warning::gh api commits/{sha}/pulls failed; doc update will be skipped"
+              PR_NUM=""
+            fi
+          fi
+
+          if [[ ! "$PR_NUM" =~ ^[0-9]+$ ]]; then
+            PR_NUM=""
+          fi
+
+          echo "number=$PR_NUM" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and open doc update PR
+        if: steps.pr.outputs.number != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          DRY_RUN_FLAG=()
+          if [ "$DRY_RUN" = "true" ]; then
+            DRY_RUN_FLAG=(--dry-run)
+          fi
+          ai-reviewer update-docs "$REPO" "$PR_NUMBER" "${DRY_RUN_FLAG[@]}"
+
+      - name: No PR detected
+        if: steps.pr.outputs.number == ''
+        run: echo "Could not detect a merged PR — skipping doc update."
