@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname $0)"
 
-APP_VERSION="0.3.1"
+APP_VERSION="0.3.2"
 
 # Build both services
 echo "Building lobby service..."
